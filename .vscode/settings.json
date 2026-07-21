@@ -1,0 +1,42 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\brahm\\OneDrive\\Desktop\\smartprint-ai\\.venv\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": [
+    "C:\\Users\\brahm\\OneDrive\\Desktop\\smartprint-ai"
+  ],
+  "python.analysis.typeCheckingMode": "off",
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.indexing": true,
+  "python.analysis.ignore": [
+    "C:\\Users\\brahm\\OneDrive\\Desktop\\smartprint-ai\\.venv"
+  ],
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none",
+    "reportUndefinedVariable": "none",
+    "reportAttributeAccessIssue": "none",
+    "reportGeneralTypeIssues": "none",
+    "reportOptionalMemberAccess": "none",
+    "reportOperatorIssue": "none",
+    "reportIndexIssue": "none",
+    "reportCallIssue": "none",
+    "reportArgumentType": "none",
+    "reportReturnType": "none",
+    "reportMissingTypeArgument": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownArgumentType": "none",
+    "reportPrivateUsage": "none",
+    "reportUnusedImport": "none",
+    "reportUnusedVariable": "none",
+    "reportDuplicateImport": "none",
+    "reportWildcardImportFromLibrary": "none",
+    "reportAbstractUsage": "none",
+    "reportInvalidTypeArguments": "none"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python"
+  }
+}

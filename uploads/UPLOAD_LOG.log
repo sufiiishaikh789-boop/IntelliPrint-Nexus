@@ -1,0 +1,39 @@
+[2026-06-27 05:54:23 UTC] [UPLOAD_LOG] Checkout initiated: 2 files, ₹24.00, printer_id=2
+[2026-06-27 05:54:23 UTC] [UPLOAD_LOG] Checkout failure
+  EXCEPTION: UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 68: character maps to <undefined>
+  Traceback (most recent call last):
+    File "C:\Users\brahm\OneDrive\Desktop\smartprint-ai\smartviews\upload.py", line 512, in show_upload
+      write_log("UPLOAD_LOG",
+      ~~~~~~~~~^^^^^^^^^^^^^^
+          f"Checkout initiated: {len(file_details)} files, "
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          f"₹{total_batch_cost:.2f}, printer_id={selected_p_id}")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\brahm\OneDrive\Desktop\smartprint-ai\smartutils\helpers.py", line 203, in write_log
+      print(entry.rstrip())
+      ~~~~~^^^^^^^^^^^^^^^^
+    File "C:\Users\brahm\anaconda3\Lib\encodings\cp1252.py", line 19, in encode
+      return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 68: character maps to <undefined>
+
+[2026-06-27 05:56:16 UTC] [UPLOAD_LOG] Checkout initiated: 2 files, ₹24.00, printer_id=2
+[2026-06-27 05:56:16 UTC] [UPLOAD_LOG] Checkout failure
+  EXCEPTION: UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 68: character maps to <undefined>
+  Traceback (most recent call last):
+    File "C:\Users\brahm\OneDrive\Desktop\smartprint-ai\smartviews\upload.py", line 512, in show_upload
+      write_log("UPLOAD_LOG",
+      ~~~~~~~~~^^^^^^^^^^^^^^
+          f"Checkout initiated: {len(file_details)} files, "
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          f"₹{total_batch_cost:.2f}, printer_id={selected_p_id}")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\brahm\OneDrive\Desktop\smartprint-ai\smartutils\helpers.py", line 203, in write_log
+      print(entry.rstrip())
+      ~~~~~^^^^^^^^^^^^^^^^
+    File "C:\Users\brahm\anaconda3\Lib\encodings\cp1252.py", line 19, in encode
+      return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  UnicodeEncodeError: 'charmap' codec can't encode character '\u20b9' in position 68: character maps to <undefined>
+
+[2026-06-27 06:14:56 UTC] [UPLOAD_LOG] Checkout initiated: 1 files, ₹2.00, printer_id=1

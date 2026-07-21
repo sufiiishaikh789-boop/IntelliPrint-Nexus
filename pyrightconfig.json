@@ -1,0 +1,34 @@
+{
+  "venvPath": "C:\\Users\\brahm\\OneDrive\\Desktop\\smartprint-ai",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "off",
+  "useLibraryCodeForTypes": true,
+  "extraPaths": [
+    "C:\\Users\\brahm\\OneDrive\\Desktop\\smartprint-ai"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportGeneralTypeIssues": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportUndefinedVariable": "none",
+  "reportOperatorIssue": "none",
+  "reportIndexIssue": "none",
+  "reportCallIssue": "none",
+  "reportArgumentType": "none",
+  "reportReturnType": "none",
+  "reportMissingTypeArgument": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportPrivateUsage": "none",
+  "reportUnusedImport": "none",
+  "reportWildcardImportFromLibrary": "none",
+  "exclude": [
+    ".venv",
+    "**/__pycache__",
+    "**/node_modules"
+  ]
+}
