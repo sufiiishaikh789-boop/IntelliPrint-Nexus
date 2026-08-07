@@ -1,5 +1,5 @@
 """
-SmartPrint AI — Enterprise AI Document Quality Analysis Dashboard
+IntelliPrint Nexus — Enterprise AI Document Quality Analysis Dashboard
 Industrial-grade computer vision assessment system.
 10-section dashboard: GPU · CNN · Score · Metrics · Pipeline · OCR · Print Rec · Summary · Viva
 """
@@ -187,11 +187,11 @@ def show_ai_analysis(job_id=None):
     st.markdown(_clean('<div class="sec-title">🧠 Deep Learning Model Card</div>'), unsafe_allow_html=True)
     m1, m2, m3, m4, m5 = st.columns(5)
     inf_ms = cnn_info.get("inference_ms", 0)
-    _stat_card(m1, "Model", MODEL_META["name"], "#00F5FF")
+    _stat_card(m1, "Model", MODEL_META["name"], "#60A5FA")
     _stat_card(m2, "Training Acc", f"{MODEL_META['training_acc']}%", "#10b981")
     _stat_card(m3, "Val Acc", f"{MODEL_META['val_acc']}%", "#06b6d4")
     _stat_card(m4, "Inference", f"{inf_ms} ms" if inf_ms else "< 1 ms", "#f59e0b")
-    _stat_card(m5, "Input Size", MODEL_META["input_resolution"], "#00D9FF")
+    _stat_card(m5, "Input Size", MODEL_META["input_resolution"], "#3B82F6")
 
     st.markdown(_clean(f"""
         <div class="model-meta-bar">
@@ -238,7 +238,7 @@ def show_ai_analysis(job_id=None):
     cnn_conf = metrics.get("cnn_confidence", 94.0)
     q1, q2, q3, q4 = st.columns(4)
     _stat_card(q1, "Overall Score", f"{overall:.1f} / 100", s_color)
-    _stat_card(q2, "CNN Confidence", f"{cnn_conf:.1f}%", "#00F5FF")
+    _stat_card(q2, "CNN Confidence", f"{cnn_conf:.1f}%", "#60A5FA")
     _stat_card(q3, "Quality Status", s_label, s_color)
     _stat_card(q4, "CNN Category", cnn_info.get("class_name", "Good Document"), "#06b6d4")
 
@@ -348,8 +348,8 @@ def show_ai_analysis(job_id=None):
 
     oc1, oc2, oc3, oc4, oc5 = st.columns(5)
     _stat_card(oc1, "OCR Est. Accuracy",  f"{ocr['estimated_accuracy']:.1f}%",    "#10b981")
-    _stat_card(oc2, "Language Hint",       ocr["language_hint"][:18],              "#00D9FF")
-    _stat_card(oc3, "Char Visibility",     ocr["char_visibility"],                 "#00F5FF")
+    _stat_card(oc2, "Language Hint",       ocr["language_hint"][:18],              "#3B82F6")
+    _stat_card(oc3, "Char Visibility",     ocr["char_visibility"],                 "#60A5FA")
     _stat_card(oc4, "Text Density",        f"{ocr['text_density_pct']:.1f}%",      "#f59e0b")
     _stat_card(oc5, "Readability Index",   ocr["readability_index"],               "#06b6d4")
 
@@ -360,7 +360,7 @@ def show_ai_analysis(job_id=None):
         st.markdown('<div style="text-align:center;font-size:0.85rem;color:rgba(255,255,255,.6);margin-bottom:4px;">Resolution Classification (CNN)</div>', unsafe_allow_html=True)
         _render_heatmap([[184, 12], [8, 92]],
                         ["Pred Low", "Pred High"], ["Act High", "Act Low"],
-                        [[0, "#1e1b4b"], [0.4, "#00B7FF"], [1, "#00F5FF"]])
+                        [[0, "#1e1b4b"], [0.4, "#2563EB"], [1, "#60A5FA"]])
     with cm2:
         st.markdown('<div style="text-align:center;font-size:0.85rem;color:rgba(255,255,255,.6);margin-bottom:4px;">Blur Classification (OpenCV)</div>', unsafe_allow_html=True)
         _render_heatmap([[215, 5], [14, 85]],
@@ -374,15 +374,15 @@ def show_ai_analysis(job_id=None):
     pr = result["print_rec"]
 
     pr1, pr2, pr3, pr4 = st.columns(4)
-    _stat_card(pr1, "Printer Type",    pr["printer_type"][:22], "#00D9FF")
-    _stat_card(pr2, "Paper Type",      pr["paper"],             "#00F5FF")
+    _stat_card(pr1, "Printer Type",    pr["printer_type"][:22], "#3B82F6")
+    _stat_card(pr2, "Paper Type",      pr["paper"],             "#60A5FA")
     _stat_card(pr3, "Color Mode",      pr["color_mode"],        "#10b981")
     _stat_card(pr4, "Print Mode",      pr["duplex"][:22],       "#06b6d4")
     pr5, pr6, pr7, pr8 = st.columns(4)
     _stat_card(pr5, "Est. Ink Usage",  pr["ink_est"],           "#f59e0b")
     _stat_card(pr6, "Print Speed",     pr["speed"],             "#f97316")
     _stat_card(pr7, "Cost Estimate",   pr["cost_est"],          "#ef4444")
-    _stat_card(pr8, "Resolution",      pr["resolution"],        "#39FF14")
+    _stat_card(pr8, "Resolution",      pr["resolution"],        "#A78BFA")
 
     # ═════════════════════════════════════════════════════════════════════════
     # SECTION 9 — AI SUMMARY CARD + RECOMMENDATIONS
@@ -444,8 +444,8 @@ def show_ai_analysis(job_id=None):
             st.rerun()
 
     rm1, rm2, rm3, rm4 = st.columns(4)
-    _stat_card(rm1, "CNN Training Duration", f"{st.session_state['cnn_training_time']}s",         "#00F5FF")
-    _stat_card(rm2, "Inference Latency",     f"{cnn_info.get('inference_ms', 124)} ms",           "#00D9FF")
+    _stat_card(rm1, "CNN Training Duration", f"{st.session_state['cnn_training_time']}s",         "#60A5FA")
+    _stat_card(rm2, "Inference Latency",     f"{cnn_info.get('inference_ms', 124)} ms",           "#3B82F6")
     _stat_card(rm3, "CNN Accuracy",          f"{st.session_state['cnn_accuracy']*100:.1f}%",      "#10b981")
     _stat_card(rm4, "Wait-Time Training",    f"{st.session_state['ml_training_time']}s",          "#3b82f6")
 
@@ -672,13 +672,13 @@ def _css() -> str:
     }
     .ent-header-badge {
         display:inline-block; padding:4px 14px; border-radius:20px;
-        background:linear-gradient(135deg,#00D9FF,#00F5FF);
+        background:linear-gradient(135deg,#3B82F6,#60A5FA);
         font-size:.72rem; font-weight:800; letter-spacing:2px; color:#fff;
         margin-bottom:10px;
     }
     .ent-title {
         font-size:2.2rem; font-weight:900;
-        background:linear-gradient(135deg,#00F5FF,#00D9FF,#06b6d4);
+        background:linear-gradient(135deg,#60A5FA,#3B82F6,#06b6d4);
         -webkit-background-clip:text; -webkit-text-fill-color:transparent;
         letter-spacing:-1px; line-height:1.1;
     }
@@ -691,7 +691,7 @@ def _css() -> str:
     .sec-title {
         font-size:1.1rem; font-weight:800; color:rgba(255,255,255,.9);
         margin:24px 0 14px; letter-spacing:.4px;
-        border-left:3px solid #00F5FF; padding-left:12px;
+        border-left:3px solid #60A5FA; padding-left:12px;
     }
 
     /* ── Pipeline bar ── */
@@ -808,7 +808,7 @@ def _css() -> str:
 
     /* ── Streamlit overrides ── */
     div.stButton > button {
-        background:linear-gradient(135deg,#00B7FF,#00F5FF) !important;
+        background:linear-gradient(135deg,#2563EB,#60A5FA) !important;
         border:none !important; color:white !important; font-weight:700 !important;
         border-radius:12px !important; transition:all .3s !important;
         box-shadow:0 4px 15px rgba(0,255,170,.4) !important;
@@ -817,6 +817,6 @@ def _css() -> str:
         transform:translateY(-2px) !important;
         box-shadow:0 8px 25px rgba(0,255,170,.6) !important;
     }
-    .stSlider > div > div > div { background:#00F5FF !important; }
+    .stSlider > div > div > div { background:#60A5FA !important; }
     </style>
     """

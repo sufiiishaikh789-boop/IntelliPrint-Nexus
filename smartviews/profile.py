@@ -1,175 +1,251 @@
 """
-SmartPrint AI - Profile Page
-Refactored layout hierarchy following standard container layout system.
+IntelliPrint Nexus - Enhanced Student Profile (Phase 3)
+Extended profile with department, course, phone, stats, and editable fields.
 """
 
 import streamlit as st
-import re
 from datetime import datetime
 
-from smartdb.crud import get_user_jobs, update_user_credentials
-from smartauth.security import hash_password
-
-
-def _clean_html(html: str) -> str:
-    html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
-    return "".join(line.strip() for line in html.splitlines())
 
 def show_profile():
-    """Render the user profile page."""
-    user = st.session_state.get("user", {})
-    username = user.get("username", "User")
-    email = user.get("email", "user@example.com")
-    role = user.get("role", "student").title()
-    member_since = user.get("created_at", datetime.now().isoformat())[:10]
+    """Render the enhanced student profile page."""
+    user    = st.session_state.get("user", {})
     user_id = user.get("id", 0)
 
-    st.html(_clean_html(_profile_css()))
+    st.html(_profile_css())
 
-    # ── SECTION 1: Page Header & Hero Avatar ──────────────────────────────
-    with st.container():
-        st.markdown(_clean_html(f"""
-            <div class="profile-hero">
-                <div class="profile-avatar">{username[0].upper() if username else 'U'}</div>
-                <div class="profile-name">{username}</div>
-                <div class="profile-role-badge">{role} Account</div>
+    st.html("""
+    <div class="prof-header">
+        <div class="prof-title">👤 My Profile</div>
+        <div class="prof-sub">Manage your account and personal details</div>
+    </div>
+    """)
+
+    # ── Load profile ──────────────────────────────────────────────────────────
+    profile = {}
+    analytics = {}
+    fav_printer = None
+    try:
+        from smartdb.crud_ext import get_user_profile, get_student_analytics, get_favorite_printer
+        profile     = get_user_profile(user_id)     or {}
+        analytics   = get_student_analytics(user_id) or {}
+        fav_printer = get_favorite_printer(user_id)
+    except Exception:
+        profile = user.copy()
+
+    username   = profile.get("username", user.get("username", "Student"))
+    email      = profile.get("email", user.get("email", ""))
+    role       = profile.get("role", "Student")
+    student_id = profile.get("student_id") or ""
+    department = profile.get("department") or ""
+    course     = profile.get("course")     or ""
+    phone      = profile.get("phone")      or ""
+    joined     = profile.get("created_at")
+    last_login = profile.get("last_login")
+
+    # ── Layout: info card left, stats right ───────────────────────────────────
+    pc1, pc2 = st.columns([2, 3])
+
+    with pc1:
+        joined_str = ""
+        if joined:
+            try:
+                d = joined if isinstance(joined, datetime) else datetime.fromisoformat(str(joined))
+                joined_str = d.strftime("%B %Y")
+            except Exception:
+                joined_str = str(joined)[:10]
+
+        login_str = ""
+        if last_login:
+            try:
+                d = last_login if isinstance(last_login, datetime) else datetime.fromisoformat(str(last_login))
+                login_str = d.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                login_str = str(last_login)[:16]
+
+        avatar_letter = username[0].upper() if username else "S"
+
+        st.html(f"""
+        <div class="prof-card">
+            <div class="prof-avatar">{avatar_letter}</div>
+            <div class="prof-username">{username}</div>
+            <div class="prof-role">{role}</div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">📧</span>
+                <span class="prof-detail-val">{email or '—'}</span>
             </div>
-            """), unsafe_allow_html=True)
-
-    # ── SECTION 2: User Account Attributes ────────────────────────────────
-    st.markdown(_clean_html('<div class="section-title">👤 Account Information</div>'), unsafe_allow_html=True)
-    with st.container():
-        st.markdown(_clean_html(f"""
-            <div class="profile-info-card">
-                <div class="info-row">
-                    <span class="info-icon">👤</span>
-                    <span class="info-label">Username</span>
-                    <span class="info-value">{username}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-icon">📧</span>
-                    <span class="info-label">Email Address</span>
-                    <span class="info-value">{email}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-icon">🛡️</span>
-                    <span class="info-label">User Privilege</span>
-                    <span class="info-value">{role}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-icon">📅</span>
-                    <span class="info-label">Registration Date</span>
-                    <span class="info-value">{member_since}</span>
-                </div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">🎓</span>
+                <span class="prof-detail-val">{student_id or '—'}</span>
             </div>
-            """), unsafe_allow_html=True)
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">🏛️</span>
+                <span class="prof-detail-val">{department or '—'}</span>
+            </div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">📚</span>
+                <span class="prof-detail-val">{course or '—'}</span>
+            </div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">📱</span>
+                <span class="prof-detail-val">{phone or '—'}</span>
+            </div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">📅</span>
+                <span class="prof-detail-val">Joined {joined_str}</span>
+            </div>
+            <div class="prof-detail-row">
+                <span class="prof-detail-icon">🕐</span>
+                <span class="prof-detail-val">Last login: {login_str or '—'}</span>
+            </div>
+        </div>
+        """)
 
-    # ── SECTION 3: Account Statistics ────────────────────────────────────
-    st.markdown(_clean_html('<div class="section-title" style="margin-top:1.5rem;">📊 Account Statistics</div>'), unsafe_allow_html=True)
-    
-    all_jobs = get_user_jobs(user_id) or []
-    total_jobs = len(all_jobs)
-    total_pages = sum(j.get("pages", 0) * j.get("copies", 1) for j in all_jobs)
-    total_spent = sum(j.get("cost", 0) for j in all_jobs)
-    completed = sum(1 for j in all_jobs if j.get("status", "").lower() in ("completed", "ready"))
+    with pc2:
+        # Quick stats
+        st.html('<div class="prof-section-title">📊 Printing Summary</div>')
+        stats_data = [
+            ("📄", "Total Jobs",     analytics.get("total_jobs", 0),          "#3B82F6"),
+            ("📑", "Total Pages",    analytics.get("total_pages", 0),         "#3b82f6"),
+            ("💰", "Total Spent",    f"₹{analytics.get('total_spent', 0):.2f}", "#10b981"),
+            ("⭐", "Fav. Printer",   fav_printer or "—",                       "#f59e0b"),
+            ("♻️", "Paper Saved",    f"{analytics.get('paper_saved', 0)} sheets", "#84cc16"),
+            ("✅", "Completed",      analytics.get("completed_jobs", 0),       "#6b7280"),
+        ]
+        stat_cols = st.columns(3)
+        for i, (icon, label, val, color) in enumerate(stats_data):
+            with stat_cols[i % 3]:
+                st.html(f"""
+                <div class="prof-stat-card" style="border-top:2px solid {color};">
+                    <div class="psc-icon">{icon}</div>
+                    <div class="psc-val" style="color:{color};">{val}</div>
+                    <div class="psc-label">{label}</div>
+                </div>
+                """)
 
-    with st.container():
-        s1, s2, s3, s4 = st.columns(4)
-        _stat_card(s1, "📄", "Total Jobs", total_jobs, "#00D9FF")
-        _stat_card(s2, "📃", "Total Pages", total_pages, "#3b82f6")
-        _stat_card(s3, "💰", "Total Spent", f"₹{total_spent:.0f}", "#10b981")
-        _stat_card(s4, "✅", "Completed", completed, "#06b6d4")
+    # ── Edit Profile Form ─────────────────────────────────────────────────────
+    st.html('<div class="prof-section-title">✏️ Edit Profile</div>')
 
-    # ── SECTION 4: Edit Profile Forms ─────────────────────────────────────
-    st.markdown(_clean_html('<div class="section-title" style="margin-top:1.5rem;">✏️ Edit profile credentials</div>'), unsafe_allow_html=True)
-    with st.container():
-        with st.form("edit_profile_form", clear_on_submit=False):
-            st.markdown('<span class="form-wrapper-marker" style="display:none;"></span>', unsafe_allow_html=True)
-            new_email = st.text_input("New Email", value=email)
-            col_p1, col_p2 = st.columns(2)
-            with col_p1:
-                new_password = st.text_input(
-                    "New Password", type="password", placeholder="Leave blank to retain current"
+    with st.form("edit_profile_form"):
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            new_student_id = st.text_input("🎓 Student ID",   value=student_id, key="ep_sid",
+                                           placeholder="e.g. CS2021001")
+            new_department = st.text_input("🏛️ Department",   value=department, key="ep_dept",
+                                           placeholder="e.g. Computer Science")
+            new_course     = st.text_input("📚 Course",       value=course,     key="ep_course",
+                                           placeholder="e.g. B.Tech CSE")
+        with fc2:
+            new_phone      = st.text_input("📱 Phone",        value=phone,      key="ep_phone",
+                                           placeholder="e.g. +91 98765 43210")
+            new_email      = st.text_input("📧 Email",        value=email,      key="ep_email",
+                                           placeholder="your@email.com")
+
+        st.caption("⚠️ Username and role cannot be changed. Contact admin for account issues.")
+        save = st.form_submit_button("💾 Save Profile", use_container_width=True)
+
+        if save:
+            try:
+                from smartdb.crud_ext import update_user_profile
+                updated = update_user_profile(
+                    user_id,
+                    student_id=new_student_id.strip(),
+                    department=new_department.strip(),
+                    course=new_course.strip(),
+                    phone=new_phone.strip(),
+                    email=new_email.strip().lower(),
                 )
-            with col_p2:
-                confirm_password = st.text_input(
-                    "Confirm New Password", type="password", placeholder="Confirm new password"
-                )
-            update_btn = st.form_submit_button("💾 Save Profile Changes", use_container_width=True)
-
-        if update_btn:
-            if new_password and new_password != confirm_password:
-                st.error("Passwords do not match.")
-            elif not new_email or "@" not in new_email or "." not in new_email:
-                st.error("Invalid email address.")
-            else:
-                pwd_hash = hash_password(new_password) if new_password else None
-                success = update_user_credentials(user_id, new_email, pwd_hash)
-                if success:
-                    st.session_state["user"]["email"] = new_email
-                    st.success("✅ Profile credentials updated successfully in database!")
+                if updated:
+                    # Update session state email
+                    if st.session_state.get("user"):
+                        st.session_state["user"]["email"] = new_email.strip().lower()
+                    st.success("✅ Profile updated successfully!")
                     st.rerun()
                 else:
-                    st.error("Failed to update profile. User not found in database.")
+                    st.error("Could not update profile. Please try again.")
+            except Exception as e:
+                st.error(f"Profile update failed: {e}")
 
-
-
-def _stat_card(column, icon: str, label: str, value, color: str):
-    with column:
-        st.markdown(_clean_html(f"""
-            <div class="pstat-card" style="border-top: 3px solid {color};">
-                <div class="pstat-icon">{icon}</div>
-                <div class="pstat-value">{value}</div>
-                <div class="pstat-label">{label}</div>
-            </div>
-            """), unsafe_allow_html=True)
+    # ── Change Password ───────────────────────────────────────────────────────
+    with st.expander("🔒 Change Password", expanded=False):
+        with st.form("change_password_form"):
+            old_pw  = st.text_input("Current Password",    type="password", key="cp_old")
+            new_pw  = st.text_input("New Password",        type="password", key="cp_new")
+            conf_pw = st.text_input("Confirm New Password", type="password", key="cp_conf")
+            cp_save = st.form_submit_button("🔐 Update Password")
+            if cp_save:
+                if not old_pw or not new_pw or not conf_pw:
+                    st.error("All password fields are required.")
+                elif new_pw != conf_pw:
+                    st.error("New passwords do not match.")
+                elif len(new_pw) < 6:
+                    st.error("Password must be at least 6 characters.")
+                else:
+                    try:
+                        import hashlib
+                        from smartdb.crud import get_user_by_username, update_user_credentials
+                        stored = get_user_by_username(username)
+                        if stored:
+                            old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
+                            if stored.password_hash == old_hash:
+                                new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+                                update_user_credentials(user_id, email, new_hash)
+                                st.success("✅ Password updated successfully!")
+                            else:
+                                st.error("Current password is incorrect.")
+                        else:
+                            st.error("User not found.")
+                    except Exception as e:
+                        st.error(f"Password update failed: {e}")
 
 
 def _profile_css() -> str:
-    return """
-    <style>
-    .profile-hero { text-align: center; padding: 20px 0 10px; }
-    .profile-avatar {
-        width: 80px; height: 80px; border-radius: 50%;
-        background: linear-gradient(135deg, #00D9FF, #00F5FF);
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 10px;
-        box-shadow: 0 8px 30px rgba(0,217,255,0.25);
-    }
-    .profile-name { font-size: 1.6rem; font-weight: 800; color: #fff; margin-bottom: 4px; }
-    .profile-role-badge {
-        display: inline-block; background: rgba(0,217,255,0.15); color: #00D9FF;
-        padding: 3px 16px; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
-        text-transform: uppercase; letter-spacing: 0.8px;
-    }
-    
-    .section-title {
-        font-size: 1.1rem; font-weight: 700;
-        color: rgba(255,255,255,0.85); margin-bottom: 12px;
-        text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    
-    .profile-info-card {
-        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 16px; padding: 16px 22px; backdrop-filter: blur(10px);
-    }
-    .info-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .info-row:last-child { border-bottom: none; }
-    .info-icon { font-size: 1.1rem; margin-right: 12px; }
-    .info-label { color: rgba(255,255,255,0.45); font-size: 0.82rem; min-width: 120px; font-weight: 500; }
-    .info-value { color: #fff; font-weight: 600; font-size: 0.9rem; }
-    
-    .pstat-card {
-        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 14px; padding: 16px 12px; text-align: center; backdrop-filter: blur(10px);
-        transition: transform 0.25s ease;
-    }
-    .pstat-card:hover { transform: translateY(-2px); }
-    .pstat-icon { font-size: 1.4rem; margin-bottom: 4px; }
-    .pstat-value { font-size: 1.45rem; font-weight: 800; color: #fff; }
-    .pstat-label { font-size: 0.72rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; }
-    
-    .form-wrapper { background: rgba(255,255,255,0.02); padding: 10px; border-radius: 12px; }
-    div[data-testid="stForm"] { border: 1px solid rgba(255,255,255,0.06) !important; background: rgba(255,255,255,0.02) !important; border-radius: 16px !important; }
-    </style>
-    """
+    return """<style>
+.prof-header { padding:14px 0 10px; margin-bottom:1rem; }
+.prof-title {
+    font-size:1.8rem; font-weight:800;
+    background:linear-gradient(135deg,#3B82F6,#8B5CF6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.prof-sub { color:rgba(255,255,255,.4); font-size:.88rem; margin-top:4px; }
+
+.prof-card {
+    background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
+    border-radius:16px; padding:24px 20px; text-align:center;
+}
+.prof-avatar {
+    width:72px; height:72px; border-radius:50%;
+    background:linear-gradient(135deg,#3B82F6,#7c3aed);
+    font-size:1.8rem; font-weight:800; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    margin:0 auto 12px;
+}
+.prof-username { font-size:1.2rem; font-weight:700; color:#fff; }
+.prof-role {
+    display:inline-block; background:rgba(0,217,255,.12);
+    border:1px solid rgba(0,217,255,.25); border-radius:14px;
+    padding:2px 12px; font-size:.72rem; color:#3B82F6;
+    font-weight:700; margin:6px 0 14px;
+}
+.prof-detail-row {
+    display:flex; align-items:center; gap:8px;
+    text-align:left; padding:6px 0;
+    border-bottom:1px solid rgba(255,255,255,.04);
+}
+.prof-detail-icon { font-size:.9rem; flex-shrink:0; }
+.prof-detail-val  { font-size:.82rem; color:rgba(255,255,255,.7); }
+
+.prof-section-title {
+    font-size:.95rem; font-weight:700; color:rgba(255,255,255,.7);
+    text-transform:uppercase; letter-spacing:.5px; margin:1.4rem 0 8px;
+}
+
+.prof-stat-card {
+    background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
+    border-radius:12px; padding:14px 10px; text-align:center; margin-bottom:8px;
+}
+.psc-icon  { font-size:1.3rem; }
+.psc-val   { font-size:1.2rem; font-weight:800; margin:4px 0; }
+.psc-label { font-size:.67rem; color:rgba(255,255,255,.4);
+             text-transform:uppercase; letter-spacing:.4px; }
+</style>"""

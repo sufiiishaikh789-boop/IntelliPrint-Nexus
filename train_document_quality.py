@@ -1,4 +1,4 @@
-"""
+﻿"""
 Transfer Learning Training Script
 Trains a MobileNetV2 CNN for document quality classification and wait-time regressors.
 """
@@ -90,7 +90,7 @@ def main():
     except AttributeError:
         pass
     print("=" * 60)
-    print("SMARTPRINT AI - RETRAINING PIPELINE")
+    print("IntelliPrint Nexus - RETRAINING PIPELINE")
     print("=" * 60)
     
     if not TF_AVAILABLE:

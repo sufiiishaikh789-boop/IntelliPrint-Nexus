@@ -1,5 +1,5 @@
 """
-SmartPrint AI - AI Assistant Chatbot
+IntelliPrint Nexus - AI Assistant Chatbot
 Interactive chatbot interface for print system configurations, costs, queue states, and troubleshooting.
 """
 
@@ -47,7 +47,7 @@ def show_ai_assistant():
 
     # If empty, save welcome message
     if not chat_history:
-        welcome_msg = f"Hi {username}! I'm your SmartPrint AI assistant. Ask me anything about print settings, pricing, real-time queue, printer status, or how to resolve blur/skew alerts."
+        welcome_msg = f"Hi {username}! I'm your IntelliPrint Nexus assistant. Ask me anything about print settings, pricing, real-time queue, printer status, or how to resolve blur/skew alerts."
         try:
             save_chat_message(user_id, "assistant", welcome_msg)
             chat_history = get_chat_history(user_id) or []
@@ -104,7 +104,7 @@ def _generate_ai_response(query: str, user_id: int, username: str) -> str:
     # 1. Cost / Price inquiries
     if any(k in q for k in ["cost", "price", "rate", "how much", "charge", "payment"]):
         return (
-            "💰 **SmartPrint AI Tariff Sheet:**\n\n"
+            "💰 **IntelliPrint Nexus Tariff Sheet:**\n\n"
             "- **Black & White:** ₹2.00 per page\n"
             "- **Color:** ₹5.00 per page\n"
             "- **Duplex Discount:** 10% discount on page cost when printing double-sided.\n"
@@ -182,7 +182,7 @@ def _chat_css() -> str:
     .chat-icon { font-size: 3rem; margin-bottom: 8px; }
     .chat-title {
         font-size: 2rem; font-weight: 800;
-        background: linear-gradient(135deg, #00D9FF, #00F5FF);
+        background: linear-gradient(135deg, #3B82F6, #60A5FA);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
     .chat-subtitle { color: rgba(255,255,255,0.5); font-size: 0.95rem; margin-top: 4px; }
@@ -224,7 +224,7 @@ def _chat_css() -> str:
         text-align: left;
     }
     .msg-user .chat-bubble {
-        background: linear-gradient(135deg, #00D9FF, #00B7FF);
+        background: linear-gradient(135deg, #3B82F6, #2563EB);
         color: #fff;
         border-bottom-right-radius: 4px;
         box-shadow: 0 4px 15px rgba(0,217,255,0.25);

@@ -1,3 +1,0 @@
-[2026-06-27 06:16:07 UTC] [PAYMENT_LOG] User initiating payment for Job IDs: [11]. Total Cost: ₹2.00
-[2026-06-27 06:16:09 UTC] [PAYMENT_LOG] Payment successful for Job ID=11, Amount=₹2.00, Transaction ID=TXN-B994E9F26F58-11
-[2026-06-27 06:16:09 UTC] [PAYMENT_LOG] Payment batch completed successfully. Txn ID prefix: TXN-B994E9F26F58

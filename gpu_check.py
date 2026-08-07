@@ -1,6 +1,6 @@
-"""
+﻿"""
 GPU Check Utility
-Demonstrates NVIDIA GPU utilization for SmartPrint AI.
+Demonstrates NVIDIA GPU utilization for IntelliPrint Nexus.
 """
 import sys
 from smartai.gpu_utils import check_nvidia_gpu

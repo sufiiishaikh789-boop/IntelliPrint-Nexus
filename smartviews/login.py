@@ -1,5 +1,5 @@
 """
-SmartPrint AI - Login Page
+IntelliPrint Nexus - Login Page
 Clean, glassmorphism login form with authentication integration.
 """
 
@@ -29,7 +29,7 @@ def show_login():
             <div class="login-header">
                 <div class="login-icon">🔐</div>
                 <div class="login-title">Welcome Back</div>
-                <div class="login-subtitle">Sign in to continue to SmartPrint AI</div>
+                <div class="login-subtitle">Sign in to continue to IntelliPrint Nexus</div>
             </div>
             """),
             unsafe_allow_html=True,)
@@ -100,7 +100,7 @@ def _login_css() -> str:
     .login-title {
         font-size: 2rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #00D9FF, #7CFF00);
+        background: linear-gradient(135deg, #3B82F6, #8B5CF6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 6px;
@@ -128,7 +128,7 @@ def _login_css() -> str:
 
     div[data-baseweb="input"] > div:focus-within,
     div[data-baseweb="base-input"] > div:focus-within {
-        border-color: #00D9FF !important;
+        border-color: #3B82F6 !important;
         box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.2) !important;
     }
 
@@ -137,7 +137,7 @@ def _login_css() -> str:
     div[data-baseweb="base-input"] input {
         background-color: transparent !important;
         color: #ffffff !important;
-        caret-color: #00F5FF !important;
+        caret-color: #60A5FA !important;
     }
 
     /* Placeholder text */
@@ -155,7 +155,7 @@ def _login_css() -> str:
     }
     div[data-baseweb="input"] button:hover,
     div[data-baseweb="base-input"] button:hover {
-        color: #00D9FF !important;
+        color: #3B82F6 !important;
     }
 
     /* Input label */
@@ -169,7 +169,7 @@ def _login_css() -> str:
     /* ── Form submit button ── */
     div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
     div[data-testid="stForm"] button[kind="primaryFormSubmit"] {
-        background: linear-gradient(135deg, #00D9FF, #7CFF00) !important;
+        background: linear-gradient(135deg, #3B82F6, #8B5CF6) !important;
         color: #000000 !important;
         border: none !important;
         border-radius: 12px !important;

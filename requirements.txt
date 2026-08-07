@@ -1,13 +1,32 @@
+﻿# IntelliPrint Nexus — Python Dependencies (Enterprise Edition)
+# ==========================================================
+# Core framework
 streamlit>=1.30.0
+
+# Database
 sqlalchemy>=2.0.0
+
+# Authentication
 bcrypt>=4.0.0
+
+# Data / plotting
 plotly>=5.15.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Image / QR / PDF
 qrcode[pil]>=7.4
 pillow>=10.0.0
+opencv-python>=4.8.0
+pymupdf>=1.24.0          # PDF generation (generate_pdf_preview)
+
+# Machine Learning
 scikit-learn>=1.3.0
 xgboost>=2.0.0
 tensorflow>=2.15.0
-numpy>=1.24.0
-pandas>=2.0.0
-opencv-python>=4.8.0
-pywin32>=306
+
+# System monitoring (enterprise monitoring dashboard)
+psutil>=5.9.0
+
+# Windows printer integration (optional — gracefully skipped on Linux/Mac)
+pywin32>=306; sys_platform == "win32"

@@ -1,1 +1,1 @@
-# smartdb - Database models and CRUD operations for SmartPrint AI
+﻿# smartdb - Database models and CRUD operations for IntelliPrint Nexus

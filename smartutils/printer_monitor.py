@@ -1,44 +1,48 @@
-"""
-SmartPrint AI - Printer Monitor
+﻿"""
+IntelliPrint Nexus — Printer Monitor (Enterprise Edition)
+=====================================================
 Syncs local OS printers to the SmartPrint SQLite Database.
+
+Enterprise improvements:
+- Lazy import of win32print (no crash on Linux/Mac)
+- Delegates to smartcore.printer_manager for cross-platform abstraction
+- Backward-compatible sync_os_printers() function preserved
 """
-import sys
+
+from __future__ import annotations
+
 import os
+import sys
 
-# Add the project root to sys.path so we can import smartdb from everywhere
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add project root to sys.path only if not already importable
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
-import win32print
-from smartdb.models import SessionLocal, Printer
+# ── Platform guard — no unconditional win32print import ────────────────────
+try:
+    import win32print
+    _PYWIN32 = True
+except ImportError:
+    _PYWIN32 = False
 
-def sync_os_printers():
-    """Detects installed Windows printers and adds them to the DB."""
+
+def sync_os_printers() -> int:
+    """
+    Detect installed Windows printers and add them to the database.
+
+    Cross-platform safe: silently does nothing on Linux/Mac.
+    Returns the count of newly added printers.
+    """
     try:
-        # PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS
-        printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
-        
-        db = SessionLocal()
-        try:
-            for p in printers:
-                printer_name = p[2]
-                # Check if it exists
-                existing = db.query(Printer).filter(Printer.name == printer_name).first()
-                if not existing:
-                    new_printer = Printer(
-                        name=printer_name,
-                        status="Online",
-                        location="Local/Network",
-                        printer_type="Virtual" if "PDF" in printer_name else "LaserJet",
-                        total_prints=0,
-                        toner_level=100.0,
-                    )
-                    db.add(new_printer)
-            db.commit()
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"Failed to sync printers: {e}")
+        from smartcore.printer_manager import printer_manager
+        count = printer_manager.sync_os_printers()
+        print(f"Printers synced: {count} new printer(s) added.")
+        return count
+    except Exception as exc:
+        print(f"Failed to sync printers: {exc}")
+        return 0
+
 
 if __name__ == "__main__":
     sync_os_printers()
-    print("Printers synced to DB.")

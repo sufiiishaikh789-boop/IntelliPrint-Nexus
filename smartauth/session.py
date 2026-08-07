@@ -1,5 +1,5 @@
 """
-SmartPrint AI - Streamlit Session Management
+IntelliPrint Nexus - Streamlit Session Management
 Manages user sessions: initialisation, login, logout, and auth guards.
 """
 
@@ -79,6 +79,12 @@ def get_current_user() -> Optional[dict]:
 
 
 def is_admin() -> bool:
-    """Quick check for admin role without displaying errors."""
+    """Quick check for admin role (Shop Owner) without displaying errors."""
     user = st.session_state.get("user")
     return bool(user and user.get("role") == "Admin")
+
+
+def is_university_admin() -> bool:
+    """Quick check for University Admin role without displaying errors."""
+    user = st.session_state.get("user")
+    return bool(user and user.get("role") == "University Admin")

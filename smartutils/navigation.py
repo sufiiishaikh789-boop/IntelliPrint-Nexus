@@ -1,17 +1,17 @@
 """
-SmartPrint AI - Floating Dock Navigation
+IntelliPrint Nexus - Floating Dock Navigation
 
 Implementation: Real st.button() widgets + explicit st.rerun().
 
   • Every icon is a REAL Streamlit st.button().
   • Clicking sets st.session_state["current_page"] then calls st.rerun().
   • Zero JavaScript. Zero HTML fake buttons. Zero hidden elements.
-  • CSS styles the 11-column stHorizontalBlock as a fixed glass pill
-    using the CSS :has() selector (Chrome 105+, Firefox 121+, Safari 15.4+).
+  • University Admin dock: 12 items. Shop Owner dock: 15 items. Student dock: 13 items.
+  • CSS :has() selector targets the correct column count for each role.
 """
 
 import streamlit as st
-from smartauth.session import is_admin, logout_session
+from smartauth.session import is_admin, is_university_admin, logout_session
 
 
 def navigate_to(page: str) -> None:
@@ -22,41 +22,66 @@ def navigate_to(page: str) -> None:
 # ── Navigation items: (emoji, label, page_key) ───────────────────────────────
 
 _STUDENT_ITEMS = [
-    ("🏠",  "Home",      "Dashboard"),
-    ("📤",  "Upload",    "Submit Print Job"),
-    ("📋",  "Queue",     "Track Order"),
-    ("💳",  "Pay",       "Payments"),
-    ("🖨️", "Print",     "AI Analysis"),
-    ("🤖",  "AI",        "AI Assistant"),
-    ("🔔",  "Alerts",    "Notifications"),
-    ("📜",  "History",   "My Print Jobs"),
-    ("👤",  "Profile",   "Profile"),
-    ("⚙️", "Settings",  "Settings"),
-    ("🚪",  "Logout",    "__logout__"),
+    ("🏠",  "Home",        "Dashboard"),
+    ("📤",  "Upload",      "Submit Print Job"),
+    ("📋",  "Queue",       "Track Order"),
+    ("💳",  "Pay",         "Payments"),
+    ("🖨️", "Print",       "Printer Availability"),
+    ("🤖",  "AI",          "AI Assistant"),
+    ("📊",  "Analytics",   "Analytics"),
+    ("🔔",  "Alerts",      "Notifications"),
+    ("📜",  "History",     "My Print Jobs"),
+    ("🆘",  "Support",     "Support"),
+    ("👤",  "Profile",     "Profile"),
+    ("⚙️", "Settings",    "Settings"),
+    ("🚪",  "Logout",      "__logout__"),
 ]
 
 _ADMIN_ITEMS = [
-    ("🏠",  "Home",      "Dashboard"),
-    ("📤",  "Upload",    "Submit Print Job"),
-    ("🔧",  "Queue",     "Queue Management"),
-    ("🖨️", "Printers",  "Printer Management"),
-    ("💳",  "Pay",       "Payments"),
-    ("🤖",  "AI",        "AI Assistant"),
-    ("🔔",  "Alerts",    "Notifications"),
-    ("👤",  "Profile",   "Profile"),
-    ("🛠️", "Admin",     "Admin Panel"),
-    ("⚙️", "Settings",  "Settings"),
-    ("🚪",  "Logout",    "__logout__"),
+    ("🏠",  "Home",       "Dashboard"),
+    ("📋",  "Jobs",       "Print Jobs"),
+    ("🔧",  "Queue",      "Queue Management"),
+    ("🖨️", "Printers",   "Printer Management"),
+    ("🖥️", "Twin",       "Digital Twin"),
+    ("📡",  "Activity",   "Activity Log"),
+    ("👥",  "Students",   "Student Management"),
+    ("💳",  "Pay",        "Payments"),
+    ("🚨",  "Alerts",     "AI Alerts"),
+    ("🤖",  "AI",         "AI Assistant"),
+    ("🔔",  "Notifs",     "Notifications"),
+    ("📊",  "Reports",    "Reports"),
+    ("👤",  "Profile",    "Profile"),
+    ("⚙️", "Settings",   "Settings"),
+    ("🚪",  "Logout",     "__logout__"),
 ]
 
-# CSS selector that uniquely targets our 11-column dock row.
-# No other part of the app uses st.columns(11).
-_DOCK = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(11))'
+_UNIVERSITY_ADMIN_ITEMS = [
+    ("🏛️", "Overview",   "Dashboard"),
+    ("📊",  "Analytics",  "Reports"),
+    ("🖨️", "Printers",   "Printer Management"),
+    ("👥",  "Shops",      "Student Management"),
+    ("🧠",  "AI Health",  "AI Alerts"),
+    ("📋",  "All Jobs",   "Print Jobs"),
+    ("💳",  "Finance",    "Payments"),
+    ("📡",  "Activity",   "Activity Log"),
+    ("🤖",  "AI",         "AI Assistant"),
+    ("🔔",  "Notifs",     "Notifications"),
+    ("👤",  "Profile",    "Profile"),
+    ("🚪",  "Logout",     "__logout__"),
+]
+
+# CSS selectors that uniquely target our dock rows by column count.
+# Shop Owner dock = 15 columns, Student dock = 13 columns, University Admin dock = 12 columns.
+_DOCK_ADMIN            = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(15))'
+_DOCK_STUDENT          = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(13)):not(:has([data-testid="stColumn"]:nth-child(14)))'
+_DOCK_UNIVERSITY_ADMIN = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(12)):not(:has([data-testid="stColumn"]:nth-child(13)))'
+_DOCK = _DOCK_ADMIN  # default; overridden in _build_dock_css
 
 
-def _build_dock_css(items: list, current: str) -> str:
+def _build_dock_css(items: list, current: str, dock_sel: str) -> str:
     """Return a <style> block that visually styles the dock."""
     n = len(items)
+    _DOCK = dock_sel
 
     # 1-based index of the active page (for nth-child CSS)
     active_nth = 1
@@ -79,8 +104,8 @@ def _build_dock_css(items: list, current: str) -> str:
     bottom: calc(100% + 10px) !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
-    background: rgba(8,8,20,.95) !important;
-    color: #e2e8f0 !important;
+    background: rgba(6,8,20,.96) !important;
+    color: #CBD5E1 !important;
     font-size: .68rem !important;
     font-weight: 600 !important;
     letter-spacing: .03em !important;
@@ -121,10 +146,13 @@ def _build_dock_css(items: list, current: str) -> str:
     background:      rgba(8,8,20,.88) !important;
     backdrop-filter: blur(24px) !important;
     -webkit-backdrop-filter: blur(24px) !important;
-    border:          1px solid rgba(255,255,255,.10) !important;
+    border-left:     1px solid rgba(255,255,255,.10) !important;
+    border-right:    1px solid rgba(255,255,255,.10) !important;
+    border-bottom:   1px solid rgba(255,255,255,.10) !important;
+    border-top:      none !important;
+    outline:         none !important;
     border-radius:   28px !important;
-    box-shadow:      0 16px 48px rgba(0,0,0,.65),
-                     inset 0 1px 0 rgba(255,255,255,.08) !important;
+    box-shadow:      0 16px 48px rgba(0,0,0,.65) !important;
 }}
 
 /* Remove default column flex sizing */
@@ -193,10 +221,10 @@ def _build_dock_css(items: list, current: str) -> str:
    HOVER – purple lift
    ═════════════════════════════════════════════════════ */
 {_DOCK} button:hover {{
-    background:   rgba(0,217,255,.18) !important;
-    border-color: rgba(0,217,255,.60) !important;
+    background:   rgba(59,130,246,.16) !important;
+    border-color: rgba(59,130,246,.55) !important;
     transform:    translateY(-5px) scale(1.10) !important;
-    box-shadow:   0 8px 24px rgba(0,217,255,.40) !important;
+    box-shadow:   0 8px 24px rgba(59,130,246,.38) !important;
     color:        #fff !important;
 }}
 
@@ -204,10 +232,10 @@ def _build_dock_css(items: list, current: str) -> str:
    ACTIVE BUTTON – column {active_nth}
    ═════════════════════════════════════════════════════ */
 {_DOCK} [data-testid="stColumn"]:nth-child({active_nth}) button {{
-    background:   rgba(0,217,255,.22) !important;
-    border-color: rgba(0,217,255,.65) !important;
+    background:   rgba(59,130,246,.20) !important;
+    border-color: rgba(59,130,246,.60) !important;
     transform:    scale(1.08) !important;
-    box-shadow:   0 6px 20px rgba(0,217,255,.45) !important;
+    box-shadow:   0 6px 20px rgba(59,130,246,.42) !important;
     color:        #fff !important;
 }}
 
@@ -220,9 +248,9 @@ def _build_dock_css(items: list, current: str) -> str:
     transform:     translateX(-50%) !important;
     width:         6px !important;
     height:        6px !important;
-    background:    #00D9FF !important;
+    background:    #3B82F6 !important;
     border-radius: 50% !important;
-    box-shadow:    0 0 6px #00D9FF, 0 0 12px rgba(0,217,255,.4) !important;
+    box-shadow:    0 0 8px rgba(59,130,246,.7), 0 0 16px rgba(59,130,246,.3) !important;
     pointer-events: none !important;
 }}
 
@@ -325,12 +353,20 @@ def render_dock() -> None:
     if not user:
         return
 
-    admin   = is_admin()
     current = st.session_state.get("current_page", "Dashboard")
-    items   = _ADMIN_ITEMS if admin else _STUDENT_ITEMS
+
+    if is_university_admin():
+        items    = _UNIVERSITY_ADMIN_ITEMS
+        dock_sel = _DOCK_UNIVERSITY_ADMIN
+    elif is_admin():
+        items    = _ADMIN_ITEMS
+        dock_sel = _DOCK_ADMIN
+    else:
+        items    = _STUDENT_ITEMS
+        dock_sel = _DOCK_STUDENT
 
     # ── CSS: style the dock container and buttons ────────────────────────────
-    st.html(_build_dock_css(items, current))
+    st.html(_build_dock_css(items, current, dock_sel))
 
     # ── Real Streamlit buttons – one per nav item ────────────────────────────
     # Pattern: if st.button(): update session_state → st.rerun()

@@ -1,5 +1,5 @@
 """
-SmartPrint AI - Batch Document Upload
+IntelliPrint Nexus - Batch Document Upload
 Extended with:
   - AI Document Quality Analyzer (OpenCV / TensorFlow CNN fallback)
   - Smart Printer Selection with availability visualization
@@ -181,6 +181,58 @@ def show_upload():
             estimated_pages = max(1, int(file_size_kb / 50))
             total_batch_pages += estimated_pages * global_copies
 
+            # ── SHA-256 Duplicate Detection ───────────────────────────────────
+            fingerprint = None
+            try:
+                import hashlib
+                fingerprint = hashlib.sha256(file_data).hexdigest()
+                from smartdb.crud_ext import get_duplicate_by_fingerprint
+                dup = get_duplicate_by_fingerprint(user_id, fingerprint)
+                if dup:
+                    # Calculate how many days ago
+                    try:
+                        from datetime import datetime as _dt
+                        dup_ts = dup.get("submitted_at") or dup.get("created_at")
+                        if isinstance(dup_ts, str):
+                            dup_ts = _dt.fromisoformat(dup_ts.replace("Z", ""))
+                        days_ago = (datetime.utcnow() - dup_ts).days if dup_ts else 0
+                        ago_str = f"{days_ago} day(s) ago" if days_ago > 0 else "earlier today"
+                    except Exception:
+                        ago_str = "recently"
+
+                    dup_key = f"dup_confirm_{idx}_{fingerprint[:8]}"
+                    st.markdown(
+                        f"""
+                        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+                                    border-radius:12px;padding:14px 16px;margin:6px 0;">
+                            <div style="font-size:.9rem;font-weight:700;color:#f59e0b;">
+                                ⚠️ Duplicate Detected — {f.name}
+                            </div>
+                            <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-top:4px;">
+                                You printed this document <b>{ago_str}</b>
+                                (Job: <code style="color:#3B82F6;">{dup.get('print_id','—')}</code>,
+                                Status: {dup.get('status','—')}).
+                            </div>
+                            <div style="font-size:.72rem;color:rgba(255,255,255,.35);margin-top:4px;">
+                                SHA-256: {fingerprint[:24]}…
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    confirmed = st.checkbox(
+                        f"✅ Yes, I want to print '{f.name}' again",
+                        key=dup_key,
+                        value=st.session_state.get(dup_key, False),
+                    )
+                    if not confirmed:
+                        continue  # Skip this file
+            except Exception:
+                pass  # Duplicate detection failure is non-critical
+
+            # Store fingerprint in session for after job creation
+            st.session_state.setdefault("pending_fingerprints", {})[f.name] = fingerprint
+
             cost_dict = calculate_cost(
                 pages=estimated_pages,
                 copies=global_copies,
@@ -287,7 +339,7 @@ def show_upload():
             queue_length=queue_len,
             pages=total_batch_pages,
             copies=1,
-            printer_speed_ppm=p.get("ppm", 30),
+            printer_speed_ppm=p.get("ppm") or 30,
             priority_flag=priority,
         )
         wait_min = wait_info["estimated_wait_minutes"]
@@ -299,7 +351,7 @@ def show_upload():
             "curr_job_name": curr_job_name,
             "wait_min": wait_min,
             "comp_time": comp_time,
-            "ppm": p.get("ppm", 30),
+            "ppm": p.get("ppm") or 30,
         })
 
     # AI Recommendation engine
@@ -506,8 +558,6 @@ def show_upload():
 
                 upload_dir = "uploads"
                 os.makedirs(upload_dir, exist_ok=True)
-                qr_dir = "qrcodes"
-                os.makedirs(qr_dir, exist_ok=True)
 
                 write_log("UPLOAD_LOG",
                     f"Checkout initiated: {len(file_details)} files, "
@@ -515,6 +565,11 @@ def show_upload():
 
                 batch_print_id = generate_print_id()
                 job_ids = []
+                # Store per-job info for the payment page
+                payment_job_details = []
+
+                # Get selected printer info for payment page
+                sel_printer = next((p for p in printer_data if p["id"] == selected_p_id), {})
 
                 for f_detail in file_details:
                     job_print_id = generate_print_id()
@@ -522,9 +577,9 @@ def show_upload():
                     with open(file_path, "wb") as fh:
                         fh.write(f_detail["data"])
 
-                    job_qr_path = os.path.join(qr_dir, f"{job_print_id}.png")
-                    qr_text = f"SmartPrint|Job|{job_print_id}|{f_detail['name']}|{username}"
-                    generate_qr_code(qr_text, job_qr_path)
+                    # ── QR code and Pickup ID are NOT generated here ──────────
+                    # They will be generated ONLY after successful payment
+                    # in smartviews/payment.py
 
                     job_dict = create_print_job(
                         user_id=user_id,
@@ -540,12 +595,37 @@ def show_upload():
                         total_pages=f_detail["pages"],
                         cost_per_page=f_detail["cost_per_page"],
                         total_cost=f_detail["cost"],
-                        qr_code_path=job_qr_path,
+                        qr_code_path=None,       # Will be set after payment
                         printer_id=selected_p_id,
                         estimated_wait_time=int(selected_wait_time),
                     )
                     job_id = job_dict["id"]
                     job_ids.append(job_id)
+
+                    # Persist SHA-256 fingerprint if available
+                    try:
+                        fp = st.session_state.get("pending_fingerprints", {}).get(f_detail["name"])
+                        if fp:
+                            from smartdb.crud_ext import set_job_fingerprint
+                            set_job_fingerprint(job_id, fp)
+                    except Exception:
+                        pass
+
+                    payment_job_details.append({
+                        "job_id": job_id,
+                        "print_id": job_print_id,
+                        "document_name": f_detail["name"],
+                        "file_path": file_path,
+                        "pages": f_detail["pages"],
+                        "copies": global_copies,
+                        "color_mode": color_mode_db,
+                        "duplex": is_duplex,
+                        "priority": priority_str,
+                        "cost_per_page": f_detail["cost_per_page"],
+                        "cost": f_detail["cost"],
+                        "quality_score": f_detail["quality_score"],
+                        "quality_label": f_detail["quality_label"],
+                    })
 
                     create_ai_analysis(
                         job_id=job_id,
@@ -559,15 +639,13 @@ def show_upload():
                         f"Job created: {job_print_id}, doc={f_detail['name']}, "
                         f"quality={f_detail['quality_score']}%, cost=₹{f_detail['cost']:.2f}")
 
-                batch_qr_path = os.path.join(qr_dir, f"{batch_print_id}.png")
-                generate_qr_code(f"SmartPrint|Batch|{batch_print_id}|₹{total_batch_cost:.2f}", batch_qr_path)
-
-                st.session_state["upload_success"]    = True
-                st.session_state["upload_batch_id"]   = batch_print_id
-                st.session_state["upload_job_ids"]    = job_ids
-                st.session_state["upload_cost"]       = total_batch_cost
-                st.session_state["upload_qr_path"]    = batch_qr_path
-                st.session_state["upload_qr_text"]    = f"SmartPrint|Batch|{batch_print_id}"
+                st.session_state["upload_success"]       = True
+                st.session_state["upload_batch_id"]      = batch_print_id
+                st.session_state["upload_job_ids"]       = job_ids
+                st.session_state["upload_cost"]          = total_batch_cost
+                st.session_state["payment_job_details"]  = payment_job_details
+                st.session_state["payment_printer"]      = sel_printer
+                st.session_state["payment_wait_time"]    = selected_wait_time
                 st.rerun()
 
             except Exception as e:
@@ -630,7 +708,7 @@ def _upload_css() -> str:
     .upload-icon { font-size:3rem; margin-bottom:8px; }
     .upload-title {
         font-size:2rem; font-weight:800;
-        background:linear-gradient(135deg,#00D9FF,#00F5FF);
+        background:linear-gradient(135deg,#3B82F6,#60A5FA);
         -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
     .upload-subtitle { color:rgba(255,255,255,0.5); font-size:0.95rem; margin-top:4px; }
@@ -640,7 +718,7 @@ def _upload_css() -> str:
         padding:30px 20px; text-align:center; background:rgba(255,255,255,0.02);
         margin-top:4px; transition:border-color .25s;
     }
-    .upload-dropzone:hover { border-color:#00F5FF; }
+    .upload-dropzone:hover { border-color:#60A5FA; }
 
     .section-title {
         font-size:1.1rem; font-weight:700; color:rgba(255,255,255,0.85);
@@ -683,7 +761,7 @@ def _upload_css() -> str:
     .qc-rec { font-size:0.82rem; color:rgba(255,255,255,.7); margin-bottom:4px; }
     .qc-sug { font-size:0.75rem; color:rgba(255,255,255,.4); }
     .qc-right { text-align:right; min-width:90px; }
-    .qc-cost { font-size:1.2rem; font-weight:800; color:#00D9FF; }
+    .qc-cost { font-size:1.2rem; font-weight:800; color:#3B82F6; }
     .qc-model { font-size:0.68rem; color:rgba(255,255,255,.35); margin-top:6px; }
     .qc-conf { font-size:0.7rem; color:rgba(255,255,255,.45); }
 
@@ -696,7 +774,7 @@ def _upload_css() -> str:
     .cost-label { color:rgba(255,255,255,.45); font-size:.8rem; text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
     .cost-value {
         font-size:1.8rem; font-weight:800;
-        background:linear-gradient(135deg,#00D9FF,#00F5FF);
+        background:linear-gradient(135deg,#3B82F6,#60A5FA);
         -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-top:2px;
     }
 
@@ -733,7 +811,7 @@ def _upload_css() -> str:
         padding:2px 8px; font-size:0.68rem; font-weight:700;
     }
     .badge-fast {
-        background:rgba(0,217,255,.12); color:#00D9FF;
+        background:rgba(0,217,255,.12); color:#3B82F6;
         border:1px solid rgba(0,217,255,.30); border-radius:12px;
         padding:2px 8px; font-size:0.68rem; font-weight:700;
     }

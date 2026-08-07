@@ -1,4 +1,4 @@
-"""
-SmartPrint AI - AI & Machine Learning Modules
+﻿"""
+IntelliPrint Nexus - AI & Machine Learning Modules
 Includes Computer Vision, Deep Learning, and Predictive Models.
 """

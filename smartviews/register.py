@@ -1,5 +1,5 @@
 """
-SmartPrint AI - Registration Page
+IntelliPrint Nexus - Registration Page
 Clean registration form with validation and user creation.
 """
 
@@ -27,7 +27,7 @@ def show_register():
             <div class="reg-header">
                 <div class="reg-icon">✨</div>
                 <div class="reg-title">Create Your Account</div>
-                <div class="reg-subtitle">Join SmartPrint AI and start printing smarter</div>
+                <div class="reg-subtitle">Join IntelliPrint Nexus and start printing smarter</div>
             </div>
             """),
             unsafe_allow_html=True,)
@@ -124,7 +124,7 @@ def _register_css() -> str:
     .reg-title {
         font-size: 2rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #00D9FF, #7CFF00);
+        background: linear-gradient(135deg, #3B82F6, #8B5CF6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 6px;
@@ -152,7 +152,7 @@ def _register_css() -> str:
 
     div[data-baseweb="input"] > div:focus-within,
     div[data-baseweb="base-input"] > div:focus-within {
-        border-color: #00D9FF !important;
+        border-color: #3B82F6 !important;
         box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.2) !important;
     }
 
@@ -161,7 +161,7 @@ def _register_css() -> str:
     div[data-baseweb="base-input"] input {
         background-color: transparent !important;
         color: #ffffff !important;
-        caret-color: #00F5FF !important;
+        caret-color: #60A5FA !important;
     }
 
     /* Placeholder text */
@@ -179,7 +179,7 @@ def _register_css() -> str:
     }
     div[data-baseweb="input"] button:hover,
     div[data-baseweb="base-input"] button:hover {
-        color: #00D9FF !important;
+        color: #3B82F6 !important;
     }
 
     /* ── Dark theme for selectbox ── */
@@ -219,7 +219,7 @@ def _register_css() -> str:
     /* ── Form submit button ── */
     div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
     div[data-testid="stForm"] button[kind="primaryFormSubmit"] {
-        background: linear-gradient(135deg, #00D9FF, #7CFF00) !important;
+        background: linear-gradient(135deg, #3B82F6, #8B5CF6) !important;
         color: #000000 !important;
         border: none !important;
         border-radius: 12px !important;

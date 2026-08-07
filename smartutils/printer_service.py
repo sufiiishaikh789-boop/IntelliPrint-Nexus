@@ -1,30 +1,71 @@
+﻿"""
+IntelliPrint Nexus — Printer Service (Enterprise Edition)
+=====================================================
+Drives a print job through the full lifecycle:
+  Queued → Preparing Printer → Printing (PPM-based) → Completed → Ready
+
+Enterprise improvements:
+- json imported at module level (not inside function body)
+- Retry wrapper: process_job_with_retry(job_id, max_retries=3)
+- Explicit rollback on all session failures
+- All stage transitions logged via structured logger
+- sys.path hack replaced with proper package import
 """
-SmartPrint AI - Printer Service
-Spools PDFs to Windows printers.  Falls back to hardware simulation
-when pywin32 is unavailable or the printer name is not installed.
-NEVER marks a job Failed unless there is a real unrecoverable exception.
-"""
+
+from __future__ import annotations
+
+import json
 import os
-import sys
 import time
+from datetime import datetime
+from typing import Optional
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+try:
+    from smartcore.logger import get_logger as _get_logger
+    _log = _get_logger("printer")
+except ImportError:
+    import logging as _logging
+    _log = _logging.getLogger("smartprint.printer")
 
+try:
+    from smartcore.config import cfg as _cfg
+    _PREPARE_SECONDS = _cfg.QUEUE.PREPARE_SECONDS
+    _MAX_RETRIES     = _cfg.QUEUE.MAX_RETRIES
+    _RETRY_BACKOFF   = _cfg.QUEUE.RETRY_BACKOFF_S
+except ImportError:
+    _PREPARE_SECONDS = 4.0
+    _MAX_RETRIES     = 3
+    _RETRY_BACKOFF   = 5.0
+
+# ── Platform guard ─────────────────────────────────────────────────────────
 try:
     import win32print
     import win32api
     PYWIN32_AVAILABLE = True
-except BaseException:
+except ImportError:
     PYWIN32_AVAILABLE = False
 
 from smartdb.models import SessionLocal, PrintJob, Printer
-from smartutils.helpers import write_log
-from datetime import datetime
 
+
+# ── write_log shim for backward compatibility ──────────────────────────────
+def write_log(log_name: str, message: str, exc: Optional[Exception] = None) -> None:
+    try:
+        from smartcore.logger import write_log as _wl
+        _wl(log_name, message, exc)
+    except ImportError:
+        try:
+            from smartutils.helpers import write_log as _legacy_wl
+            _legacy_wl(log_name, message, exc)
+        except Exception:
+            pass
+
+
+# ── Printer availability check ─────────────────────────────────────────────
 
 def is_printer_installed(printer_name: str) -> bool:
     """Check if the printer name matches an installed local/network printer."""
-    if not PYWIN32_AVAILABLE:
+    if not PYWIN32_AVAILABLE or not printer_name:
         return False
     try:
         printers = win32print.EnumPrinters(
@@ -35,144 +76,238 @@ def is_printer_installed(printer_name: str) -> bool:
         return False
 
 
-def print_pdf(file_path: str, printer_name: str, copies: int = 1) -> bool:
-    """
-    Spool a PDF to a Windows printer, or simulate if hardware not present.
-    Returns True on success (real or simulated). Never raises.
-    """
-    write_log("PRINTER_LOG",
-        f"print_pdf called: file='{file_path}', printer='{printer_name}', copies={copies}")
+# ── Timeline helper ────────────────────────────────────────────────────────
+
+def _append_timeline(db, job: PrintJob, event: str, icon: str = "✓") -> None:
+    """Append a timeline event within an already-open DB session."""
+    try:
+        timeline = json.loads(getattr(job, "job_timeline", None) or "[]")
+    except Exception:
+        timeline = []
+    timeline.append({
+        "time":  datetime.utcnow().strftime("%H:%M"),
+        "event": event,
+        "icon":  icon,
+    })
+    job.job_timeline = json.dumps(timeline)
+
+
+# ── Hardware spooling ──────────────────────────────────────────────────────
+
+def print_pdf_hardware(file_path: str, printer_name: str, copies: int = 1) -> bool:
+    """Spool a PDF to a Windows printer, or simulate if hardware not present."""
+    _log.info("print_pdf: file='%s' printer='%s' copies=%d", file_path, printer_name, copies)
 
     if not os.path.exists(file_path):
-        write_log("PRINTER_LOG",
-            f"File not found: '{file_path}' — simulating print anyway (demo mode)")
-        # In demo mode: simulate even for missing files
-        time.sleep(1.0)
+        _log.info("File not found: '%s' — simulating (demo mode)", file_path)
         return True
 
-    # ── Hardware path ──────────────────────────────────────────────────
     if PYWIN32_AVAILABLE and is_printer_installed(printer_name):
         try:
             for _ in range(copies):
                 win32api.ShellExecute(0, "printto", file_path, f'"{printer_name}"', ".", 0)
                 time.sleep(1)
-            write_log("PRINTER_LOG",
-                f"Physical print SUCCESS: '{printer_name}', {copies} copies")
+            _log.info("Physical print SUCCESS: '%s' %d copies", printer_name, copies)
             return True
-        except Exception as e:
-            write_log("PRINTER_LOG",
-                f"Physical print FAILED for '{printer_name}' — falling back to simulation", e)
-            # Fall through to simulation rather than returning False
+        except Exception as exc:
+            _log.warning("Physical print FAILED — falling back to simulation: %s", exc)
 
-    # ── Simulation path (demo / no hardware) ──────────────────────────
-    write_log("PRINTER_LOG",
-        f"[SIMULATION] Simulating print to '{printer_name}', {copies} copies, "
-        f"file='{file_path}'")
-    time.sleep(1.5)  # Realistic simulation delay
-    write_log("PRINTER_LOG",
-        f"[SIMULATION] Print simulation COMPLETE for '{printer_name}'")
-    return True  # Always succeeds in simulation
+    _log.info("[SIMULATION] Simulating print to '%s'", printer_name)
+    return True
 
 
-def process_job(job_id: int) -> bool:
+# ── Core pipeline ──────────────────────────────────────────────────────────
+
+def process_job_realistic(
+    job_id: int,
+    ppm: int = 20,
+    print_duration_s: float = 30.0,
+) -> bool:
     """
-    Execute the full print pipeline for a single job:
-        Queued → Printing → Ready
-    Only sets Failed on a genuine unrecoverable exception.
+    Execute the full realistic print pipeline for a single job.
+
+    Stages:
+      1. Preparing Printer  (PREPARE_SECONDS delay)
+      2. Printing           (print_duration_s — based on pages/PPM)
+      3. Completed
+      4. Ready for Pickup
+
+    Returns True on success, False on failure.
+    The job is marked Failed on unrecoverable errors.
     """
     db = SessionLocal()
-    job = None
     try:
         job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-
         if not job:
-            write_log("JOB_LOG", f"process_job({job_id}): job not found in DB")
+            _log.error("process_job_realistic(%d): job not found", job_id)
             return False
 
-        write_log("JOB_LOG",
-            f"process_job START: Job {job.print_id} "
-            f"(status={job.status}, printer_id={job.printer_id})")
+        _log.info(
+            "START job_id=%d print_id='%s' status='%s' printer_id=%s ppm=%d duration=%.1fs",
+            job.id, job.print_id, job.status, job.printer_id, ppm, print_duration_s,
+        )
 
-        # ── Validate status ────────────────────────────────────────────
         if job.status != "Queued":
-            write_log("JOB_LOG",
-                f"process_job SKIP: Job {job.print_id} is '{job.status}', not 'Queued'")
+            _log.info("SKIP job_id=%d: not Queued (status='%s')", job.id, job.status)
             return False
 
-        # ── Resolve printer ────────────────────────────────────────────
+        # ── Resolve printer ────────────────────────────────────────────────
         printer = None
         if job.printer_id:
             printer = db.query(Printer).filter(Printer.id == job.printer_id).first()
-
         if not printer:
-            # Fallback: assign any online printer
-            printer = db.query(Printer).filter(Printer.status == "Online").first()
+            printer = db.query(Printer).filter(Printer.status.in_(["Online", "Idle"])).first()
             if printer:
                 job.printer_id = printer.id
-                write_log("JOB_LOG",
-                    f"Job {job.print_id}: no printer assigned — "
-                    f"auto-assigned to '{printer.name}'")
-            else:
-                # No online printer at all — use virtual/mock printer
-                write_log("JOB_LOG",
-                    f"Job {job.print_id}: no Online printers — "
-                    f"using virtual printer for simulation")
-                # Simulate without a real printer record
-                job.status = "Printing"
-                db.commit()
-                write_log("JOB_LOG", f"Job {job.print_id} → Printing [virtual]")
-                time.sleep(1.5)
-                job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-                job.status = "Ready"
-                db.commit()
-                write_log("JOB_LOG", f"Job {job.print_id} → Ready [virtual simulation]")
-                return True
 
-        # ── Printing ───────────────────────────────────────────────────
-        job.status = "Printing"
+        printer_name = printer.name if printer else "Virtual Printer"
+
+        # ══ STAGE 1: Preparing Printer ══════════════════════════════════════
+        job.status = "Preparing"
+        _append_timeline(db, job, "Printer is Warming Up", "🔥")
         db.commit()
-        write_log("JOB_LOG",
-            f"Job {job.print_id} → Printing on '{printer.name}'")
+        _log.info("job_id=%d → Preparing Printer ('%s')", job_id, printer_name)
+        db.close()
+        db = None
 
-        success = print_pdf(
-            file_path=job.file_path,
-            printer_name=printer.name,
-            copies=job.copies or 1
-        )
+        time.sleep(_PREPARE_SECONDS)
 
-        # ── Result ─────────────────────────────────────────────────────
+        # ══ STAGE 2: Printing ══════════════════════════════════════════════
+        db = SessionLocal()
         job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-        if success:
-            job.status = "Ready"
-            printer.total_prints = (printer.total_prints or 0) + (job.copies or 1) * (job.total_pages or 1)
-            printer.toner_level = max(0.0,
-                (printer.toner_level or 100.0) - 0.1 * (job.copies or 1) * (job.total_pages or 1))
-            db.commit()
-            write_log("JOB_LOG",
-                f"Job {job.print_id} → Ready (print SUCCESS) "
-                f"[toner now {printer.toner_level:.1f}%]")
-            return True
-        else:
-            # print_pdf now always returns True, but keep this for safety
-            job.status = "Ready"
-            db.commit()
-            write_log("JOB_LOG",
-                f"Job {job.print_id} → Ready (simulation fallback)")
-            return True
+        if not job:
+            return False
 
-    except Exception as e:
-        write_log("JOB_LOG", f"CRITICAL: process_job exception for Job ID={job_id}", e)
-        # Only set Failed on a real unhandled exception
-        try:
-            if job is None:
-                job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
-            if job and job.status not in ("Ready", "Completed", "Collected"):
-                job.status = "Failed"
-                db.commit()
-                write_log("JOB_LOG",
-                    f"Job ID={job_id} → Failed (exception during processing)")
-        except Exception as inner_e:
-            write_log("JOB_LOG", f"Could not update job status to Failed", inner_e)
+        printer_id = job.printer_id
+        if printer_id:
+            printer = db.query(Printer).filter(Printer.id == printer_id).first()
+
+        job.status            = "Printing"
+        job.print_started_at  = datetime.utcnow()
+        _append_timeline(db, job, f"Printing Started on {printer_name}", "🖨️")
+        if printer:
+            printer.status = "Busy"
+        db.commit()
+        _log.info("job_id=%d → Printing on '%s' for %.1fs", job_id, printer_name, print_duration_s)
+
+        # Capture data needed after DB close
+        pdf_path = getattr(job, "preview_pdf_path", None) or job.file_path or ""
+        copies   = job.copies or 1
+        db.close()
+        db = None
+
+        # Spool to hardware (non-blocking — spooler handles actual timing)
+        print_pdf_hardware(pdf_path, printer_name, copies)
+
+        # Wait for realistic print duration
+        time.sleep(print_duration_s)
+
+        # ══ STAGE 3: Completed ═════════════════════════════════════════════
+        db = SessionLocal()
+        job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
+        if not job:
+            return False
+
+        if printer_id:
+            printer = db.query(Printer).filter(Printer.id == printer_id).first()
+
+        job.status       = "Completed"
+        job.completed_at = datetime.utcnow()
+        _append_timeline(db, job, "Printing Completed Successfully", "✅")
+
+        if printer:
+            printer.status        = "Online"
+            printer.total_prints  = (printer.total_prints or 0) + copies * (job.total_pages or 1)
+            printer.toner_level   = max(
+                0.0,
+                (printer.toner_level or 100.0) - 0.1 * copies * (job.total_pages or 1),
+            )
+
+        db.commit()
+        _log.info("job_id=%d → Completed", job_id)
+        db.close()
+        db = None
+
+        time.sleep(1)
+
+        # ══ STAGE 4: Ready for Pickup ══════════════════════════════════════
+        db = SessionLocal()
+        job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
+        if not job:
+            return False
+
+        job.status = "Ready"
+        _append_timeline(db, job, "Ready for Pickup — Please collect at the counter", "📦")
+        db.commit()
+        _log.info("job_id=%d → Ready for Pickup", job_id)
+        return True
+
+    except Exception as exc:
+        _log.error("CRITICAL: process_job_realistic job_id=%d: %s", job_id, exc, exc_info=True)
+        # Try to mark job as Failed
+        _mark_job_failed(job_id, str(exc))
         return False
     finally:
+        if db is not None:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            db.close()
+
+
+def _mark_job_failed(job_id: int, reason: str) -> None:
+    """Safely mark a job as Failed without raising exceptions."""
+    try:
+        db = SessionLocal()
+        job = db.query(PrintJob).filter(PrintJob.id == job_id).first()
+        if job and (job.status or "") not in ("Ready", "Completed", "Collected"):
+            job.status = "Failed"
+            _append_timeline(db, job, f"Job Failed: {reason[:100]}", "⚠️")
+            db.commit()
         db.close()
+    except Exception as exc:
+        _log.error("Could not mark job %d as Failed: %s", job_id, exc)
+
+
+# ── Retry wrapper ──────────────────────────────────────────────────────────
+
+def process_job_with_retry(
+    job_id: int,
+    ppm: int = 20,
+    print_duration_s: float = 30.0,
+    max_retries: int = _MAX_RETRIES,
+) -> bool:
+    """
+    Run ``process_job_realistic`` with exponential-backoff retry.
+
+    Returns True if any attempt succeeds.
+    Marks job as Failed and returns False after all retries are exhausted.
+    """
+    last_exc: Optional[Exception] = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = process_job_realistic(job_id, ppm, print_duration_s)
+            if result:
+                return True
+            if attempt < max_retries:
+                delay = _RETRY_BACKOFF * (2 ** (attempt - 1))
+                _log.warning("Job %d attempt %d/%d failed — retrying in %.1fs", job_id, attempt, max_retries, delay)
+                time.sleep(delay)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                delay = _RETRY_BACKOFF * (2 ** (attempt - 1))
+                _log.warning("Job %d exception attempt %d/%d: %s — retrying in %.1fs", job_id, attempt, max_retries, exc, delay)
+                time.sleep(delay)
+
+    _log.error("Job %d exhausted %d retries", job_id, max_retries)
+    _mark_job_failed(job_id, f"Exhausted {max_retries} retries. Last error: {last_exc}")
+    return False
+
+
+# ── Backward-compat alias ──────────────────────────────────────────────────
+def process_job(job_id: int) -> bool:
+    """Legacy wrapper — uses default PPM=20, 30s duration."""
+    return process_job_realistic(job_id, ppm=20, print_duration_s=30.0)

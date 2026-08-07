@@ -1,163 +1,231 @@
 """
-SmartPrint AI - Settings
-Refactored layout hierarchy following standard container layout system.
+IntelliPrint Nexus - Enhanced Settings Page (Phase 3)
+Default printer, default print options, notification preferences.
 """
 
 import streamlit as st
-import re
 
-def _clean_html(html: str) -> str:
-    html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
-    return "".join(line.strip() for line in html.splitlines())
+
+_DEFAULT_SETTINGS = {
+    "default_copies":      1,
+    "default_color_mode":  "BW",
+    "default_duplex":      False,
+    "default_paper_size":  "A4",
+    "default_priority":    "Normal",
+    "notify_upload":       True,
+    "notify_ai":           True,
+    "notify_payment":      True,
+    "notify_queue":        True,
+    "notify_printing":     True,
+    "notify_completed":    True,
+    "notify_ready":        True,
+    "notify_collected":    True,
+    "notify_cancelled":    True,
+}
+
 
 def show_settings():
-    """Render the settings page."""
-    st.html(_clean_html(_settings_css()))
+    """Render the enhanced student settings page."""
+    user    = st.session_state.get("user", {})
+    user_id = user.get("id", 0)
 
-    # ── SECTION 1: Page Header ───────────────────────────────────────────
-    with st.container():
-        st.markdown(_clean_html("""
-            <div class="settings-header">
-                <div class="settings-icon">⚙️</div>
-                <div class="settings-title">Settings Portal</div>
-                <div class="settings-subtitle">Configure system default actions and notification preferences</div>
+    st.html(_settings_css())
+
+    st.html("""
+    <div class="sett-header">
+        <div class="sett-title">⚙️ Settings</div>
+        <div class="sett-sub">Configure your default printing preferences and notification options</div>
+    </div>
+    """)
+
+    # ── Load settings ─────────────────────────────────────────────────────────
+    settings = {}
+    try:
+        from smartdb.crud_ext import get_user_settings
+        settings = get_user_settings(user_id) or {}
+    except Exception:
+        pass
+
+    # Merge with defaults
+    s = {**_DEFAULT_SETTINGS, **settings}
+
+    # ── Printer list for default selection ────────────────────────────────────
+    printers = []
+    printer_names = ["(No preference)"]
+    try:
+        from smartdb.crud import get_all_printers
+        printers = get_all_printers() or []
+        printer_names += [p.get("name", f"Printer {p['id']}") for p in printers
+                          if (p.get("status") or "").lower() not in ("offline", "maintenance")]
+    except Exception:
+        pass
+
+    # ── Default Print Settings ────────────────────────────────────────────────
+    st.html('<div class="sett-section">🖨️ Default Print Settings</div>')
+
+    with st.form("settings_print_form"):
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
+            fav_printer_stored = s.get("default_printer", "(No preference)")
+            fav_idx = printer_names.index(fav_printer_stored) if fav_printer_stored in printer_names else 0
+            new_printer = st.selectbox(
+                "⭐ Default Printer",
+                printer_names,
+                index=fav_idx,
+                key="sett_printer",
+                help="Your preferred printer will be pre-selected on the upload page.",
+            )
+            new_copies = st.number_input(
+                "📄 Default Copies",
+                min_value=1, max_value=50,
+                value=int(s.get("default_copies", 1)),
+                key="sett_copies",
+            )
+
+        with pc2:
+            new_color = st.selectbox(
+                "🎨 Default Colour Mode",
+                ["BW", "Color"],
+                index=0 if s.get("default_color_mode", "BW") == "BW" else 1,
+                key="sett_color",
+            )
+            new_paper = st.selectbox(
+                "📐 Default Paper Size",
+                ["A4", "A3", "Letter", "Legal"],
+                index=["A4", "A3", "Letter", "Legal"].index(s.get("default_paper_size", "A4")),
+                key="sett_paper",
+            )
+
+        with pc3:
+            new_duplex = st.checkbox(
+                "📃 Default Duplex (Double-sided)",
+                value=bool(s.get("default_duplex", False)),
+                key="sett_duplex",
+                help="Save paper by printing on both sides by default.",
+            )
+            new_priority = st.selectbox(
+                "⚡ Default Priority",
+                ["Normal", "High", "Urgent"],
+                index=["Normal", "High", "Urgent"].index(s.get("default_priority", "Normal")),
+                key="sett_priority",
+            )
+
+        save_print = st.form_submit_button("💾 Save Print Settings", use_container_width=True)
+        if save_print:
+            try:
+                from smartdb.crud_ext import save_user_settings
+                save_user_settings(user_id, {
+                    "default_printer":    new_printer,
+                    "default_copies":     new_copies,
+                    "default_color_mode": new_color,
+                    "default_paper_size": new_paper,
+                    "default_duplex":     new_duplex,
+                    "default_priority":   new_priority,
+                })
+                st.success("✅ Print settings saved!")
+                # Store in session for upload page to read
+                st.session_state["user_print_settings"] = {
+                    "printer":    new_printer,
+                    "copies":     new_copies,
+                    "color_mode": new_color,
+                    "paper_size": new_paper,
+                    "duplex":     new_duplex,
+                    "priority":   new_priority,
+                }
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not save settings: {e}")
+
+    # ── Notification Preferences ──────────────────────────────────────────────
+    st.html('<div class="sett-section">🔔 Notification Preferences</div>')
+    st.caption("Choose which events trigger notifications in your Notification Center.")
+
+    with st.form("settings_notif_form"):
+        nc1, nc2 = st.columns(2)
+        notif_fields = [
+            ("notify_upload",    "📤 Document Upload"),
+            ("notify_ai",        "🤖 AI Analysis Complete"),
+            ("notify_payment",   "💳 Payment Received"),
+            ("notify_queue",     "📋 Queue Assigned"),
+            ("notify_printing",  "🖨️ Printing Started"),
+            ("notify_completed", "✅ Printing Completed"),
+            ("notify_ready",     "📦 Ready for Pickup"),
+            ("notify_collected", "🎉 Document Collected"),
+            ("notify_cancelled", "❌ Job Cancelled"),
+        ]
+        new_notif = {}
+        for i, (key, label) in enumerate(notif_fields):
+            with (nc1 if i % 2 == 0 else nc2):
+                new_notif[key] = st.checkbox(
+                    label,
+                    value=bool(s.get(key, True)),
+                    key=f"sett_{key}",
+                )
+
+        save_notif = st.form_submit_button("💾 Save Notification Settings", use_container_width=True)
+        if save_notif:
+            try:
+                from smartdb.crud_ext import save_user_settings
+                save_user_settings(user_id, new_notif)
+                st.success("✅ Notification preferences saved!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not save preferences: {e}")
+
+    # ── Reset to defaults ─────────────────────────────────────────────────────
+    st.html('<div class="sett-section">🔄 Reset</div>')
+    if st.button("🔄 Reset All Settings to Default", key="sett_reset"):
+        try:
+            from smartdb.crud_ext import save_user_settings
+            save_user_settings(user_id, _DEFAULT_SETTINGS)
+            if "user_print_settings" in st.session_state:
+                del st.session_state["user_print_settings"]
+            st.success("✅ Settings reset to defaults.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Reset failed: {e}")
+
+    # ── Current settings preview ──────────────────────────────────────────────
+    st.html('<div class="sett-section">👁️ Current Configuration</div>')
+    cfg_items = [
+        ("Default Printer",    s.get("default_printer", "No preference")),
+        ("Default Copies",     str(s.get("default_copies", 1))),
+        ("Colour Mode",        s.get("default_color_mode", "BW")),
+        ("Paper Size",         s.get("default_paper_size", "A4")),
+        ("Duplex",             "Yes" if s.get("default_duplex") else "No"),
+        ("Priority",           s.get("default_priority", "Normal")),
+    ]
+    cfg_cols = st.columns(3)
+    for i, (label, val) in enumerate(cfg_items):
+        with cfg_cols[i % 3]:
+            st.html(f"""
+            <div class="sett-cfg-row">
+                <div class="scr-label">{label}</div>
+                <div class="scr-val">{val}</div>
             </div>
-            """), unsafe_allow_html=True)
-
-    # Load saved preferences
-    prefs = st.session_state.get("user_preferences", {})
-    current_theme = prefs.get("theme", "Dark")
-    email_notif = prefs.get("email_notifications", True)
-    auto_refresh = prefs.get("auto_refresh", True)
-    default_copies = prefs.get("default_copies", 1)
-    default_color = prefs.get("default_color_mode", "Black & White")
-
-    # ── SECTION 2: Appearance settings ───────────────────────────────────
-    st.markdown(_clean_html('<div class="section-title">🎨 Appearance</div>'), unsafe_allow_html=True)
-    with st.container():
-        col_lbl, col_val = st.columns([2, 1])
-        with col_lbl:
-            st.markdown(_clean_html("""
-                <div class="setting-card">
-                    <div class="setting-name">Theme Style</div>
-                    <div class="setting-desc">Toggle the primary user interface dark/light canvas mode</div>
-                </div>
-                """), unsafe_allow_html=True)
-        with col_val:
-            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
-            theme = st.selectbox(
-                "Theme Selection",
-                options=["Dark", "Light", "System"],
-                index=["Dark", "Light", "System"].index(current_theme),
-                label_visibility="collapsed",
-                key="theme_selection_key"
-            )
-
-    # ── SECTION 3: Notification toggles ──────────────────────────────────
-    st.markdown(_clean_html('<div class="section-title" style="margin-top:1.5rem;">🔔 Notifications</div>'), unsafe_allow_html=True)
-    with st.container():
-        col_lbl1, col_val1 = st.columns([2, 1])
-        with col_lbl1:
-            st.markdown(_clean_html("""
-                <div class="setting-card">
-                    <div class="setting-name">Email Alerts</div>
-                    <div class="setting-desc">Send automated queue status transitions directly to inbox</div>
-                </div>
-                """), unsafe_allow_html=True)
-        with col_val1:
-            st.markdown('<div style="margin-top:14px;"></div>', unsafe_allow_html=True)
-            email_toggle = st.toggle("Email Alerts Toggle", value=email_notif, key="email_notif_toggle", label_visibility="collapsed")
-
-    with st.container():
-        col_lbl2, col_val2 = st.columns([2, 1])
-        with col_lbl2:
-            st.markdown(_clean_html("""
-                <div class="setting-card">
-                    <div class="setting-name">Auto-Refresh Queue</div>
-                    <div class="setting-desc">Continuously sync active print jobs without manual refresh</div>
-                </div>
-                """), unsafe_allow_html=True)
-        with col_val2:
-            st.markdown('<div style="margin-top:14px;"></div>', unsafe_allow_html=True)
-            auto_refresh_toggle = st.toggle("Auto-Refresh Toggle", value=auto_refresh, key="auto_refresh_toggle", label_visibility="collapsed")
-
-    # ── SECTION 4: Print Defaults configuration ──────────────────────────
-    st.markdown(_clean_html('<div class="section-title" style="margin-top:1.5rem;">🖨️ Printer Defaults</div>'), unsafe_allow_html=True)
-    with st.container():
-        dc1, dc2 = st.columns(2)
-        with dc1:
-            st.markdown(_clean_html("""
-                <div class="setting-card">
-                    <div class="setting-name">Default Copies</div>
-                    <div class="setting-desc">Pre-fill the copies count field on job upload</div>
-                </div>
-                """), unsafe_allow_html=True)
-            copies_default = st.number_input(
-                "Default Copies field", min_value=1, max_value=50, value=default_copies,
-                label_visibility="collapsed",
-                key="copies_default_key"
-            )
-
-        with dc2:
-            st.markdown(_clean_html("""
-                <div class="setting-card">
-                    <div class="setting-name">Default Color Mode</div>
-                    <div class="setting-desc">Pre-select print format color option</div>
-                </div>
-                """), unsafe_allow_html=True)
-            color_default = st.selectbox(
-                "Default Color field",
-                options=["Black & White", "Color"],
-                index=["Black & White", "Color"].index(default_color),
-                label_visibility="collapsed",
-                key="color_default_key"
-            )
-
-    # ── SECTION 5: Save Settings Button ──────────────────────────────────
-    with st.container():
-        st.markdown('<div style="margin-top:1.8rem;"></div>', unsafe_allow_html=True)
-        if st.button("💾 Save User Settings", use_container_width=True, key="save_settings_btn", type="primary"):
-            st.session_state["user_preferences"] = {
-                "theme": theme,
-                "email_notifications": email_toggle,
-                "auto_refresh": auto_refresh_toggle,
-                "default_copies": copies_default,
-                "default_color_mode": color_default,
-            }
-            st.success("✅ System preferences updated successfully!")
-
-    # ── SECTION 6: Danger zone expander ──────────────────────────────────
-    with st.container():
-        st.markdown('<div style="margin-top:1.5rem;"></div>', unsafe_allow_html=True)
-        with st.expander("⚠️ System Management Details", expanded=False):
-            st.warning("These operations wipe cache assets and persist logs deletion.")
-            if st.button("🗑️ Reset Local Database Cache", key="adm_reset_db", use_container_width=True):
-                st.info("System cache reset successful.")
+            """)
 
 
 def _settings_css() -> str:
-    return """
-    <style>
-    .settings-header { text-align: center; padding: 20px 0 10px; }
-    .settings-icon { font-size: 3rem; margin-bottom: 8px; }
-    .settings-title {
-        font-size: 2rem; font-weight: 800;
-        background: linear-gradient(135deg, #00D9FF, #00F5FF);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .settings-subtitle { color: rgba(255,255,255,0.5); font-size: 0.95rem; margin-top: 4px; }
-    
-    .section-title {
-        font-size: 1.1rem; font-weight: 700;
-        color: rgba(255,255,255,0.85); margin-bottom: 12px;
-        text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    
-    .setting-card {
-        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 12px; padding: 12px 18px; margin-bottom: 8px;
-    }
-    .setting-name { font-weight: 600; color: #fff; font-size: 0.95rem; margin-bottom: 2px; }
-    .setting-desc { color: rgba(255,255,255,0.4); font-size: 0.8rem; }
-    </style>
-    """
+    return """<style>
+.sett-header { padding:14px 0 10px; margin-bottom:1rem; }
+.sett-title {
+    font-size:1.8rem; font-weight:800;
+    background:linear-gradient(135deg,#3B82F6,#8B5CF6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.sett-sub { color:rgba(255,255,255,.4); font-size:.88rem; margin-top:4px; }
+.sett-section {
+    font-size:.95rem; font-weight:700; color:rgba(255,255,255,.75);
+    text-transform:uppercase; letter-spacing:.5px;
+    margin:1.5rem 0 10px; padding-bottom:6px;
+    border-bottom:1px solid rgba(255,255,255,.07);
+}
+.sett-cfg-row {
+    background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
+    border-radius:10px; padding:12px 14px; margin-bottom:8px;
+}
+.scr-label { font-size:.7rem; color:rgba(255,255,255,.4);
+             text-transform:uppercase; letter-spacing:.4px; }
+.scr-val { font-size:1rem; font-weight:700; color:#3B82F6; margin-top:2px; }
+</style>"""

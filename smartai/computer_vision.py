@@ -1,12 +1,19 @@
-"""
-SmartPrint AI - Enterprise Computer Vision Pipeline
+﻿"""
+IntelliPrint Nexus — Enterprise Computer Vision Pipeline (Enterprise Edition)
+========================================================================
 Full multi-stage OpenCV preprocessing and 20-metric quality assessment engine.
 All metrics are computed from actual image data — no random values.
+
+Enterprise improvements:
+- Removed dead ``import io`` (imported but never used)
+- Added Tuple, List to typing imports for complete type coverage
+- from __future__ import annotations
 """
-import io
+from __future__ import annotations
+
 import cv2
 import numpy as np
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 
 # ─────────────────────────────────────────────────────────────────────────────

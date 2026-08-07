@@ -1,1 +1,1 @@
-# SmartViews - View pages for SmartPrint AI
+﻿# SmartViews - View pages for IntelliPrint Nexus

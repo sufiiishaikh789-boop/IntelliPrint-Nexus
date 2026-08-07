@@ -1,4 +1,4 @@
-"""
+﻿"""
 Document Quality Prediction Script
 Inference pipeline using OpenCV and Deep Learning CNN.
 """
@@ -13,7 +13,7 @@ def main():
     except AttributeError:
         pass
     print("=" * 60)
-    print("SMARTPRINT AI - ACCELERATED INFERENCE PIPELINE")
+    print("IntelliPrint Nexus - ACCELERATED INFERENCE PIPELINE")
     print("=" * 60)
     
     if len(sys.argv) < 2:
