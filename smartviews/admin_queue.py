@@ -9,9 +9,36 @@ from datetime import datetime
 
 from smartdb.crud import get_all_jobs, get_all_printers
 
+
 def _clean_html(html: str) -> str:
     html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
     return "".join(line.strip() for line in html.splitlines())
+
+
+def _refund_badge_html(refund_status: str) -> str:
+    """Return a small inline HTML badge for refund status."""
+    rs = (refund_status or "").upper()
+    colors = {
+        "REFUNDED":   "#10b981",
+        "PENDING":    "#f59e0b",
+        "PROCESSING": "#3b82f6",
+        "FAILED":     "#ef4444",
+    }
+    label_map = {
+        "REFUNDED":   "REFUNDED",
+        "PENDING":    "REFUND PENDING",
+        "PROCESSING": "PROCESSING",
+        "FAILED":     "REFUND FAILED",
+    }
+    if not rs or rs not in colors:
+        return ""
+    c = colors[rs]
+    lbl = label_map.get(rs, rs)
+    return (
+        f'<span style="background:{c}22;color:{c};border:1px solid {c}44;'
+        f'padding:1px 7px;border-radius:9px;font-size:.62rem;font-weight:700;">'
+        f'{lbl}</span>'
+    )
 
 def _live_queue_monitor(all_jobs: list, printers: list):
     """Render a live queue monitor with per-printer job tracking."""
@@ -202,7 +229,7 @@ def show_admin_queue():
 
 
 def _render_job_list(jobs: list):
-    """Render a read-only list of jobs."""
+    """Render a read-only list of jobs with refund badge and power failure action."""
     if not jobs:
         st.info("No jobs found in this category.")
         return
@@ -214,7 +241,18 @@ def _render_job_list(jobs: list):
         user_id = job.get("user_id", "?")
         created = job.get("created_at", "")[:16]
         priority = job.get("priority", False)
-        
+        job_id = job.get("id")
+
+        # Fetch refund info if any
+        refund_badge = ""
+        try:
+            from smartdb.crud_refund import get_payment_by_job_with_refund
+            rp = get_payment_by_job_with_refund(job_id) if job_id else None
+            if rp and rp.get("refund_status"):
+                refund_badge = _refund_badge_html(rp["refund_status"])
+        except Exception:
+            pass
+
         status_display = status.replace("_", " ").title()
         badge_color = _status_color(status.lower())
 
@@ -226,9 +264,56 @@ def _render_job_list(jobs: list):
                 <span class="aq-badge" style="background:{badge_color}20;color:{badge_color};">
                     {'⚡ ' if priority else ''}{status_display}
                 </span>
+                {refund_badge}
                 <div class="aq-job-time">{created}</div>
             </div>
             """), unsafe_allow_html=True)
+
+        # Power failure button for active jobs
+        if status.lower() in ("queued", "printing", "pending", "preparing"):
+            if st.button(
+                f"⚡ Power Failure",
+                key=f"aq_pf_{job_id}",
+                help=f"Issue full refund to student for job {print_id} due to power failure",
+            ):
+                st.session_state[f"aq_pf_confirm_{job_id}"] = True
+
+            if st.session_state.get(f"aq_pf_confirm_{job_id}"):
+                pf_paid = float(job.get("total_cost") or job.get("cost") or 0)
+                try:
+                    from smartdb.crud import get_payment_by_job
+                    pf_pay = get_payment_by_job(job_id)
+                    if pf_pay:
+                        pf_paid = float(pf_pay.get("amount") or pf_paid)
+                except Exception:
+                    pass
+
+                st.warning(
+                    f"**⚡ Power Failure — Full Refund** for job **{print_id}**\n\n"
+                    f"This will issue a full refund of **\u20b9{pf_paid:.2f}** to the student."
+                )
+                qc1, qc2 = st.columns(2)
+                with qc1:
+                    if st.button("✅ Confirm", key=f"aq_pf_ok_{job_id}", use_container_width=True):
+                        from smartauth.session import get_current_user
+                        from smartcore.refund_service import process_power_failure_refund
+                        admin_user = get_current_user()
+                        admin_id = admin_user.get("id", 0) if admin_user else 0
+                        pf_result = process_power_failure_refund(
+                            job_id=job_id,
+                            admin_user_id=admin_id,
+                        )
+                        st.session_state[f"aq_pf_confirm_{job_id}"] = False
+                        if pf_result.get("success"):
+                            st.success(f"Full refund of \u20b9{pf_result.get('refund_amount', 0):.2f} initiated.")
+                        else:
+                            st.error(pf_result.get("message", "Failed."))
+                        import time; time.sleep(1)
+                        st.rerun()
+                with qc2:
+                    if st.button("✕ Cancel", key=f"aq_pf_no_{job_id}", use_container_width=True):
+                        st.session_state[f"aq_pf_confirm_{job_id}"] = False
+                        st.rerun()
 
 
 def _mini_stat(column, label: str, value: str, color: str):
@@ -248,6 +333,9 @@ def _status_color(status: str) -> str:
         "completed": "#10b981",
         "ready": "#06b6d4",
         "failed": "#ef4444",
+        "cancelled": "#ef4444",
+        "refunded": "#10b981",
+        "refund_pending": "#f59e0b",
     }.get(status, "#6b7280")
 
 def _aq_css() -> str:

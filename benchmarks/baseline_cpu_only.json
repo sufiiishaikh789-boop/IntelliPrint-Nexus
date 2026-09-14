@@ -1,0 +1,71 @@
+{
+  "_note": "This is the baseline CPU benchmark result from this deployment. Run python -m smartcore.gpu_benchmark to generate fresh results.",
+  "generated_at": "2026-09-14 (baseline)",
+  "environment": {
+    "python": "3.14.6",
+    "os": "Windows 10",
+    "cpu": "AMD64 Family 22 Model 48 (4 cores)",
+    "device": "cpu",
+    "gpu_name": "CPU (no NVIDIA GPU on this machine)",
+    "cuda": null,
+    "warmup_iters": 3,
+    "measured_iters": 50,
+    "model_version": "1.0.0"
+  },
+  "results": {
+    "cpu_baseline": {
+      "backend": "cpu_numpy",
+      "device": "cpu",
+      "framework": "NumPy",
+      "precision": "FP32",
+      "workload": "matmul_224x224",
+      "warmup_iters": 3,
+      "measured_iters": 50,
+      "status": "success",
+      "_note": "Run python -m smartcore.gpu_benchmark to populate with live values"
+    },
+    "gpu_fp32": {
+      "backend": "pytorch_cuda:0_fp32",
+      "device": "cuda:0",
+      "framework": "PyTorch",
+      "precision": "FP32",
+      "status": "skipped",
+      "reason": "CUDA not available on this machine"
+    },
+    "gpu_fp16": {
+      "backend": "pytorch_cuda:0_fp16",
+      "device": "cuda:0",
+      "framework": "PyTorch",
+      "precision": "FP16",
+      "status": "skipped",
+      "reason": "CUDA not available on this machine"
+    },
+    "gpu_bf16": {
+      "backend": "pytorch_cuda:0_bf16",
+      "device": "cuda:0",
+      "framework": "PyTorch",
+      "precision": "BF16",
+      "status": "skipped",
+      "reason": "CUDA not available on this machine"
+    },
+    "torch_compile": {
+      "backend": "torch_compile",
+      "status": "skipped",
+      "reason": "PyTorch not installed"
+    },
+    "onnx_cuda": {
+      "backend": "onnx_cuda",
+      "status": "skipped",
+      "reason": "onnxruntime not installed"
+    },
+    "batch_comparison": []
+  },
+  "summary": {
+    "cpu_mean_ms": null,
+    "gpu_fp32_mean_ms": null,
+    "gpu_fp16_mean_ms": null,
+    "gpu_speedup": 0.0,
+    "best_device": "cpu",
+    "_note": "Speedup will be computed automatically when GPU is present"
+  }
+}

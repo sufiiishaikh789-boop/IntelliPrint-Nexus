@@ -1,4 +1,4 @@
-﻿# IntelliPrint Nexus — Python Dependencies (Enterprise Edition)
+# IntelliPrint Nexus — Python Dependencies (Enterprise Edition)
 # ==========================================================
 # Core framework
 streamlit>=1.30.0
@@ -30,3 +30,27 @@ psutil>=5.9.0
 
 # Windows printer integration (optional — gracefully skipped on Linux/Mac)
 pywin32>=306; sys_platform == "win32"
+
+# ── Test runner ────────────────────────────────────────────────────────────
+pytest>=7.0.0
+
+# ── Optional GPU acceleration (NOT auto-installed) ─────────────────────────
+# Install manually after matching your CUDA version.
+# NEVER pip install these blindly — version must match CUDA Toolkit on the machine.
+#
+# PyTorch with CUDA 12.1 (most common on RTX 30xx/40xx):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#
+# PyTorch with CUDA 11.8 (older GPUs):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# TensorFlow with CUDA (Linux / WSL2 recommended):
+#   pip install tensorflow[and-cuda]
+#
+# ONNX Runtime GPU:
+#   pip install onnxruntime-gpu
+#
+# Verify GPU after install:
+#   python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+#   python gpu_diagnostics.py
+

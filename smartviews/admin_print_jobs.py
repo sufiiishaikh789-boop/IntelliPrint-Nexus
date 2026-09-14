@@ -11,6 +11,29 @@ from smartdb.crud import (
 )
 
 
+def _refund_status_badge(refund_status: str) -> str:
+    """Return an HTML badge for the given refund status string."""
+    colors = {
+        "REFUNDED":   ("#10b981", "#052e16"),
+        "PENDING":    ("#f59e0b", "#1c1003"),
+        "PROCESSING": ("#3b82f6", "#0c1a3a"),
+        "FAILED":     ("#ef4444", "#1c0303"),
+    }
+    rs = (refund_status or "").upper()
+    fg, bg = colors.get(rs, ("#6b7280", "#0a0a0a"))
+    label = {
+        "REFUNDED":   "REFUNDED",
+        "PENDING":    "REFUND PENDING",
+        "PROCESSING": "REFUND PROCESSING",
+        "FAILED":     "REFUND FAILED",
+    }.get(rs, rs)
+    return (
+        f'<span style="background:{bg};color:{fg};border:1px solid {fg}44;'
+        f'padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:700;">'
+        f'{label}</span>'
+    )
+
+
 def show_print_jobs():
     """Render the admin print jobs management page."""
     st.html(_pj_css())
@@ -182,7 +205,7 @@ def _render_job_row(job: dict, printers_map: dict):
         """, unsafe_allow_html=True)
 
         # Action buttons
-        a1, a2, a3, a4, a5, a6, _ = st.columns([1, 1, 1, 1, 1, 1, 3])
+        a1, a2, a3, a4, a5, a6, a7, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 2])
         with a1:
             if st.button("👁️", key=f"pj_view_{job_id}", help="View Details"):
                 st.session_state[f"pj_detail_{job_id}"] = True
@@ -215,6 +238,66 @@ def _render_job_row(job: dict, printers_map: dict):
                     move_job_to_top(job_id)
                     st.success(f"Emergency print initiated for {print_id}.")
                     st.rerun()
+        with a7:
+            # Power Failure refund — only for Queued or Printing jobs
+            if (status or "").lower() in ("queued", "printing", "pending", "preparing"):
+                if st.button("⚡", key=f"pj_pf_{job_id}", help="Mark Power Failure — Full Refund"):
+                    st.session_state[f"pf_confirm_{job_id}"] = True
+
+        # Power failure confirmation dialog
+        if st.session_state.get(f"pf_confirm_{job_id}"):
+            # Fetch payment to show refund amount
+            pf_paid = amount
+            try:
+                from smartdb.crud import get_payment_by_job
+                pf_pay = get_payment_by_job(job_id)
+                if pf_pay:
+                    pf_paid = float(pf_pay.get("amount") or amount)
+            except Exception:
+                pass
+
+            st.markdown(f"""
+            <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+                        border-radius:14px;padding:16px 20px;margin:8px 0;">
+                <div style="font-size:1rem;font-weight:800;color:#FCD34D;margin-bottom:8px;">⚡ Power Failure Confirmation</div>
+                <div style="font-size:.82rem;color:rgba(255,255,255,.55);margin-bottom:12px;">
+                    This will cancel the print job and issue a <b style="color:#10b981;">FULL REFUND</b> to the student.
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;
+                            border-bottom:1px solid rgba(255,255,255,.06);font-size:.85rem;color:rgba(255,255,255,.6);">
+                    <span>Job</span><b style="color:#3B82F6;font-family:monospace;">{print_id}</b>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;
+                            font-size:.95rem;font-weight:700;color:#fff;">
+                    <span>Full Refund Amount</span><span style="color:#10b981;">&#8377;{pf_paid:.2f}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            pfc1, pfc2 = st.columns(2)
+            with pfc1:
+                if st.button("⚡ Confirm Power Failure", key=f"pf_confirm_btn_{job_id}", use_container_width=True):
+                    from smartauth.session import get_current_user
+                    from smartcore.refund_service import process_power_failure_refund
+                    admin_user = get_current_user()
+                    admin_id = admin_user.get("id", 0) if admin_user else 0
+                    pf_result = process_power_failure_refund(
+                        job_id=job_id,
+                        admin_user_id=admin_id,
+                    )
+                    st.session_state[f"pf_confirm_{job_id}"] = False
+                    if pf_result.get("success"):
+                        st.success(
+                            f"⚡ Power failure processed. Full refund of "
+                            f"\u20b9{pf_result.get('refund_amount', 0):.2f} initiated for job {print_id}."
+                        )
+                    else:
+                        st.error(f"❌ {pf_result.get('message', 'Power failure processing failed.')}")
+                    import time; time.sleep(1.5)
+                    st.rerun()
+            with pfc2:
+                if st.button("✕ Cancel", key=f"pf_cancel_btn_{job_id}", use_container_width=True):
+                    st.session_state[f"pf_confirm_{job_id}"] = False
+                    st.rerun()
 
         # Detail expander
         if st.session_state.get(f"pj_detail_{job_id}"):
@@ -245,14 +328,41 @@ def _render_job_row(job: dict, printers_map: dict):
                     </div>
                     """, unsafe_allow_html=True)
                 with d3:
+                    # Fetch refund info
+                    refund_info = {}
+                    try:
+                        from smartdb.crud_refund import get_payment_by_job_with_refund
+                        rp = get_payment_by_job_with_refund(job_id) or {}
+                        refund_info = rp
+                    except Exception:
+                        pass
+
+                    refund_status = refund_info.get("refund_status") or "—"
+                    refund_reason_raw = refund_info.get("refund_reason") or ""
+                    refund_reason_label = {
+                        "STUDENT_CANCELLATION": "Student Cancellation",
+                        "POWER_FAILURE": "Power Failure",
+                    }.get(refund_reason_raw, refund_reason_raw or "—")
+                    orig_amt    = refund_info.get("original_amount") or refund_info.get("amount") or amount
+                    penalty_amt = refund_info.get("penalty_amount") or 0
+                    refund_amt  = refund_info.get("refund_amount") or 0
+                    rs_color = {
+                        "REFUNDED": "#10b981", "PENDING": "#f59e0b",
+                        "FAILED": "#ef4444", "PROCESSING": "#3b82f6",
+                    }.get((refund_status or "").upper(), "#6b7280")
+
                     st.markdown(f"""
                     <div class="pj-detail-card">
-                        <div class="pj-detail-title">💰 Cost Info</div>
-                        <div class="pj-detail-row"><span>Cost/Page</span><b>₹{job.get('cost_per_page',2.0):.2f}</b></div>
+                        <div class="pj-detail-title">💰 Cost &amp; Refund Info</div>
+                        <div class="pj-detail-row"><span>Cost/Page</span><b>&#8377;{job.get('cost_per_page',2.0):.2f}</b></div>
                         <div class="pj-detail-row"><span>Total Pages</span><b>{pages} × {copies}</b></div>
-                        <div class="pj-detail-row"><span>Base Cost</span><b>₹{(pages*copies*(job.get('cost_per_page') or 2.0)):.2f}</b></div>
-                        <div class="pj-detail-row"><span>Priority Fee</span><b>{'₹5.00' if (priority or '').lower()=='priority' else '₹0.00'}</b></div>
-                        <div class="pj-detail-row"><span>Total</span><b style="color:#8B5CF6;">₹{amount:.2f}</b></div>
+                        <div class="pj-detail-row"><span>Original Paid</span><b style="color:#8B5CF6;">&#8377;{orig_amt:.2f}</b></div>
+                        <div class="pj-detail-row"><span>Cancellation Fee</span><b style="color:#ef4444;">&#8377;{penalty_amt:.2f}</b></div>
+                        <div class="pj-detail-row"><span>Refund Amount</span><b style="color:#10b981;">&#8377;{refund_amt:.2f}</b></div>
+                        <div class="pj-detail-row"><span>Refund Reason</span><b>{refund_reason_label}</b></div>
+                        <div class="pj-detail-row"><span>Refund Status</span>
+                            <b style="color:{rs_color};">{refund_status.upper() if refund_status != '—' else '—'}</b>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 with d4:

@@ -113,6 +113,7 @@ show_student_analytics   = _safe_import("smartviews.student_analytics",        "
 show_support             = _safe_import("smartviews.support",                  "show_support")
 show_university_admin    = _safe_import("smartviews.university_admin_dashboard","show_university_admin_dashboard")
 show_printer_availability = _safe_import("smartviews.printer_availability",      "show_printer_availability")
+show_gpu_monitor          = _safe_import("smartviews.gpu_monitor",                 "show_gpu_monitor")
 
 # ─── Navigation & Utilities ───────────────────────────────────
 # We will render the dock and floating chat at the very end of the page rendering
@@ -174,6 +175,7 @@ else:
         "Analytics":    show_student_analytics,
         "Support":      show_support,
         "Printer Availability": show_printer_availability,
+        "GPU Monitor":  show_gpu_monitor,
     }
 
     handler = PAGE_MAP.get(page, show_student_dashboard)

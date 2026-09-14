@@ -30,30 +30,34 @@ def show_admin_payment_mgmt():
         st.error(f"Error loading payments: {e}")
         return
 
-    # ── Summary metrics ───────────────────────────────────────────────────
+    # ── Summary metrics ────────────────────────────────────────────────────
     total_revenue = sum(p.get("amount", 0) or 0 for p in payments)
     paid_count = sum(1 for p in payments if (p.get("payment_status") or "").lower() in ("completed", "paid", "success"))
     pending_count = sum(1 for p in payments if (p.get("payment_status") or "").lower() in ("pending",))
     failed_count = sum(1 for p in payments if (p.get("payment_status") or "").lower() in ("failed",))
+    refunded_count = sum(1 for p in payments if (p.get("payment_status") or "").lower() in ("refunded",))
 
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4, m5 = st.columns(5)
     _pay_metric(m1, "💰 Total Revenue", f"₹{total_revenue:,.2f}", "#8B5CF6")
     _pay_metric(m2, "✅ Paid", paid_count, "#10b981")
     _pay_metric(m3, "⏳ Pending", pending_count, "#f59e0b")
     _pay_metric(m4, "❌ Failed", failed_count, "#ef4444")
+    _pay_metric(m5, "💰 Refunded", refunded_count, "#06b6d4")
 
     st.markdown("---")
 
     # ── Search & Filters ──────────────────────────────────────────────────
-    f1, f2, f3 = st.columns([3, 1, 1])
+    f1, f2, f3, f4 = st.columns([3, 1, 1, 1])
     with f1:
         search = st.text_input("🔍 Search by Student, Document, or Transaction ID", placeholder="Type to search...", key="pm_search", label_visibility="collapsed")
     with f2:
-        status_f = st.selectbox("Payment Status", ["All", "Completed", "Pending", "Failed"], key="pm_status")
+        status_f = st.selectbox("Payment Status", ["All", "Completed", "Pending", "Failed", "Refunded"], key="pm_status")
     with f3:
         method_f = st.selectbox("Method", ["All", "UPI", "Card", "Cash", "Wallet"], key="pm_method")
+    with f4:
+        refund_f = st.selectbox("Refund Status", ["All", "Has Refund", "Refunded", "Refund Failed"], key="pm_refund")
 
-    # ── Filter ────────────────────────────────────────────────────────────
+    # ── Filter ────────────────────────────────────────────────────
     filtered = payments[:]
     if search:
         q = search.lower()
@@ -66,6 +70,12 @@ def show_admin_payment_mgmt():
         filtered = [p for p in filtered if (p.get("payment_status") or "").lower() == status_f.lower()]
     if method_f != "All":
         filtered = [p for p in filtered if (p.get("method") or "").lower() == method_f.lower()]
+    if refund_f == "Has Refund":
+        filtered = [p for p in filtered if p.get("refund_status")]
+    elif refund_f == "Refunded":
+        filtered = [p for p in filtered if (p.get("refund_status") or "").upper() == "REFUNDED"]
+    elif refund_f == "Refund Failed":
+        filtered = [p for p in filtered if (p.get("refund_status") or "").upper() == "FAILED"]
 
     st.markdown(f'<div class="pay-count">Showing <b>{len(filtered)}</b> of <b>{len(payments)}</b> transactions</div>', unsafe_allow_html=True)
 
@@ -129,6 +139,20 @@ def show_admin_payment_mgmt():
         payment_id = p.get("payment_id")
         print_id = p.get("print_id", "")
 
+        # Refund badge inline
+        refund_status_raw = p.get("refund_status") or ""
+        refund_badge_html = ""
+        if refund_status_raw:
+            rs_upper = refund_status_raw.upper()
+            rs_color = {"REFUNDED": "#10b981", "PENDING": "#f59e0b",
+                        "FAILED": "#ef4444", "PROCESSING": "#3b82f6"}.get(rs_upper, "#6b7280")
+            rs_label = {"REFUNDED": "REFUNDED", "PENDING": "REFUND PENDING",
+                        "FAILED": "REFUND FAILED", "PROCESSING": "REFUND PROCESSING"}.get(rs_upper, rs_upper)
+            refund_badge_html = (
+                f'<span class="pay-badge" style="background:{rs_color}22;color:{rs_color};'
+                f'border:1px solid {rs_color}44;">{rs_label}</span>'
+            )
+
         st.markdown(f"""
         <div class="pay-row">
             <span class="pay-cell mono" style="flex:0.7;color:#3B82F6;">{txn_id}</span>
@@ -136,15 +160,16 @@ def show_admin_payment_mgmt():
             <span class="pay-cell" style="flex:1.6;color:rgba(255,255,255,.7);" title="{doc}">{doc}</span>
             <span class="pay-cell" style="flex:0.5;">{pages}</span>
             <span class="pay-cell" style="flex:0.5;">{copies}</span>
-            <span class="pay-cell" style="flex:0.5;color:{'#3B82F6' if color_mode=='Color' else '#a0aec0'};">{color_mode}</span>
-            <span class="pay-cell" style="flex:0.6;color:{'#f59e0b' if priority=='Priority' else '#6b7280'};">{priority}</span>
-            <span class="pay-cell" style="flex:0.7;color:#8B5CF6;font-weight:700;">₹{amount:.2f}</span>
+            <span class="pay-cell" style="flex:0.5;color:{'#3B82F6' if color_mode=='Color' else '#a0aec0'}">{color_mode}</span>
+            <span class="pay-cell" style="flex:0.6;color:{'#f59e0b' if priority=='Priority' else '#6b7280'}">{priority}</span>
+            <span class="pay-cell" style="flex:0.7;color:#8B5CF6;font-weight:700;">&#8377;{amount:.2f}</span>
             <span class="pay-cell" style="flex:0.7;color:rgba(255,255,255,.6);">{method}</span>
             <span class="pay-cell" style="flex:0.9;">
                 <span class="pay-badge" style="background:{pay_color}22;color:{pay_color};border:1px solid {pay_color}44;">{pay_status}</span>
             </span>
             <span class="pay-cell" style="flex:0.9;">
                 <span class="pay-badge" style="background:{job_color}22;color:{job_color};border:1px solid {job_color}44;">{job_status}</span>
+                {refund_badge_html}
             </span>
             <span class="pay-cell" style="flex:1.3;font-size:.72rem;color:rgba(255,255,255,.4);">{pay_time}</span>
         </div>
@@ -174,12 +199,12 @@ def show_admin_payment_mgmt():
                     </div>
                     """, unsafe_allow_html=True)
                 with r2:
-                    completed_at = str(p.get("completed_at") or "—")[:16]
-                    submitted_at = str(p.get("submitted_at") or "—")[:16]
+                    completed_at = str(p.get("completed_at") or "\u2014")[:16]
+                    submitted_at = str(p.get("submitted_at") or "\u2014")[:16]
                     st.markdown(f"""
                     <div class="pay-receipt">
                         <div class="pay-receipt-title">🖨️ Print Details</div>
-                        <div class="pay-receipt-row"><span>Document</span><b>{p.get('document_name','—')}</b></div>
+                        <div class="pay-receipt-row"><span>Document</span><b>{p.get('document_name','\u2014')}</b></div>
                         <div class="pay-receipt-row"><span>Total Pages</span><b>{pages}</b></div>
                         <div class="pay-receipt-row"><span>Copies</span><b>{copies}</b></div>
                         <div class="pay-receipt-row"><span>Color Mode</span><b>{color_mode}</b></div>
@@ -189,7 +214,40 @@ def show_admin_payment_mgmt():
                         <div class="pay-receipt-row"><span>Submitted</span><b>{submitted_at}</b></div>
                         <div class="pay-receipt-row"><span>Completed</span><b>{completed_at}</b></div>
                         <div class="pay-receipt-row"><span>Print Status</span><b style="color:{job_color};">{job_status}</b></div>
-                        <div class="pay-receipt-row"><span>Ready for Pickup</span><b>{'✅ Yes' if job_status in ('Ready','Completed','Collected') else '⏳ Not yet'}</b></div>
+                        <div class="pay-receipt-row"><span>Ready for Pickup</span><b>{'\u2705 Yes' if job_status in ('Ready','Completed','Collected') else '\u23f3 Not yet'}</b></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Refund details panel (if any refund exists)
+                refund_status_det = p.get("refund_status")
+                if refund_status_det:
+                    rs_col = {"REFUNDED": "#10b981", "PENDING": "#f59e0b",
+                              "FAILED": "#ef4444", "PROCESSING": "#3b82f6"}.get(
+                                  (refund_status_det or "").upper(), "#6b7280")
+                    refund_reason_label = {
+                        "STUDENT_CANCELLATION": "Student Cancellation (2% fee deducted)",
+                        "POWER_FAILURE": "Power Failure (Full Refund)",
+                    }.get(p.get("refund_reason") or "", p.get("refund_reason") or "\u2014")
+                    orig_a = p.get("original_amount") or amount
+                    pen_a  = p.get("penalty_amount") or 0
+                    ref_a  = p.get("refund_amount") or 0
+                    gw_id  = p.get("gateway_refund_id") or "\u2014"
+                    r_init = (str(p.get("refund_initiated_at") or ""))[:16]
+                    r_proc = (str(p.get("refund_processed_at") or ""))[:16]
+                    fail_r = p.get("refund_failure_reason") or ""
+                    st.markdown(f"""
+                    <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);
+                                border-radius:12px;padding:14px 16px;margin-top:10px;">
+                        <div style="font-size:.88rem;font-weight:700;color:#6EE7B7;margin-bottom:10px;">💰 Refund Details</div>
+                        <div class="pay-receipt-row"><span>Refund Status</span><b style="color:{rs_col};">{(refund_status_det or '').upper()}</b></div>
+                        <div class="pay-receipt-row"><span>Reason</span><b>{refund_reason_label}</b></div>
+                        <div class="pay-receipt-row"><span>Original Amount</span><b>&#8377;{orig_a:.2f}</b></div>
+                        <div class="pay-receipt-row"><span>Cancellation Fee</span><b style="color:#ef4444;">&#8377;{pen_a:.2f}</b></div>
+                        <div class="pay-receipt-row"><span>Refunded Amount</span><b style="color:#10b981;">&#8377;{ref_a:.2f}</b></div>
+                        <div class="pay-receipt-row"><span>Gateway Refund ID</span><b style="font-family:monospace;">{gw_id}</b></div>
+                        <div class="pay-receipt-row"><span>Initiated At</span><b>{r_init}</b></div>
+                        <div class="pay-receipt-row"><span>Processed At</span><b>{r_proc}</b></div>
+                        {f'<div class="pay-receipt-row"><span>Failure Reason</span><b style="color:#ef4444;">{fail_r}</b></div>' if fail_r else ''}
                     </div>
                     """, unsafe_allow_html=True)
                 if st.button("✕ Close", key=f"pm_close_{payment_id}_{print_id}"):

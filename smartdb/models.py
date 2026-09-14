@@ -171,6 +171,9 @@ class PrintJob(Base):
     submitted_at         = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at           = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     completed_at         = Column(DateTime, nullable=True)
+    # ── Cancellation metadata ─────────────────────────────────────────────────
+    cancellation_reason  = Column(Text,     nullable=True)  # free-text reason stored at cancel time
+    cancelled_at         = Column(DateTime, nullable=True)  # timestamp of cancellation
 
     # Relationships
     user       = relationship("User",        back_populates="print_jobs")
@@ -208,6 +211,17 @@ class Payment(Base):
     notes          = Column(Text, nullable=True)   # refund reason, webhook payload, etc.
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at     = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
+    # ── Refund tracking ──────────────────────────────────────────────────────
+    # Populated when a refund is initiated (student cancel or admin power-failure)
+    refund_status         = Column(String(20),  nullable=True)   # PENDING / PROCESSING / REFUNDED / FAILED
+    refund_reason         = Column(String(30),  nullable=True)   # STUDENT_CANCELLATION / POWER_FAILURE
+    original_amount       = Column(Float,       nullable=True)   # snapshot of amount at refund time
+    penalty_amount        = Column(Float,       nullable=True)   # 2% for student cancel, 0 for power failure
+    refund_amount         = Column(Float,       nullable=True)   # actual money returned
+    gateway_refund_id     = Column(String(100), nullable=True)   # gateway response ID
+    refund_failure_reason = Column(Text,        nullable=True)   # if refund_status == FAILED
+    refund_initiated_at   = Column(DateTime,    nullable=True)
+    refund_processed_at   = Column(DateTime,    nullable=True)
 
     # Relationships
     job  = relationship("PrintJob", back_populates="payments")
@@ -331,6 +345,48 @@ class MaintenanceLog(Base):
         return f"<MaintenanceLog(id={self.id}, printer_id={self.printer_id}, severity='{self.severity}')>"
 
 
+class GPUJobTelemetry(Base):
+    """
+    Per-inference GPU job telemetry.
+    Records device, precision, latency, memory before/after/peak, status.
+    Never stores PII — only job IDs and hardware metrics.
+    """
+
+    __tablename__ = "gpu_job_telemetry"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    print_job_id     = Column(Integer, ForeignKey("print_jobs.id", ondelete="SET NULL"), nullable=True)
+    model_name       = Column(String(128),  nullable=False, default="SmartPrintDocumentAnalyzer")
+    model_version    = Column(String(32),   nullable=False, default="1.0.0")
+    device           = Column(String(32),   nullable=False, default="cpu")   # "cuda:0" | "cpu"
+    gpu_name         = Column(String(128),  nullable=False, default="CPU")
+    precision        = Column(String(8),    nullable=False, default="FP32")  # FP32 | FP16 | BF16
+    batch_size       = Column(Integer,      nullable=False, default=1)
+    warmup_iters     = Column(Integer,      nullable=False, default=0)
+    measured_iters   = Column(Integer,      nullable=False, default=1)
+    latency_ms       = Column(Float,        nullable=False, default=0.0)
+    memory_before_mb = Column(Float,        nullable=True)
+    memory_after_mb  = Column(Float,        nullable=True)
+    peak_memory_mb   = Column(Float,        nullable=True)
+    throughput_rps   = Column(Float,        nullable=True)
+    status           = Column(String(20),   nullable=False, default="success")
+    # success | fallback | oom | timeout | error | rejected
+    error_message    = Column(Text,         nullable=True)
+    started_at       = Column(DateTime,     nullable=True)
+    completed_at     = Column(DateTime,     nullable=True)
+    created_at       = Column(DateTime,     default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_gpu_tel_status",    "status"),
+        Index("ix_gpu_tel_device",    "device"),
+        Index("ix_gpu_tel_created",   "created_at"),
+        Index("ix_gpu_tel_job",       "print_job_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<GPUJobTelemetry(id={self.id}, device='{self.device}', status='{self.status}', latency={self.latency_ms}ms)>"
+
+
 class ChatHistory(Base):
     """AI assistant chat message history."""
 
@@ -379,6 +435,9 @@ def _safe_add_columns() -> None:
         ("print_jobs", "is_bookmarked",         "BOOLEAN DEFAULT 0"),
         ("print_jobs", "reprint_count",         "INTEGER DEFAULT 0"),
         ("print_jobs", "updated_at",            "DATETIME"),
+        # print_jobs refund/cancellation additions
+        ("print_jobs", "cancellation_reason",   "TEXT"),
+        ("print_jobs", "cancelled_at",          "DATETIME"),
         # printers additions
         ("printers",   "pages_per_minute",      "INTEGER DEFAULT 20"),
         ("printers",   "last_seen_at",          "DATETIME"),
@@ -391,9 +450,30 @@ def _safe_add_columns() -> None:
         ("users",      "updated_at",            "DATETIME"),
         # notifications additions
         ("notifications", "notification_type",  "VARCHAR(30) DEFAULT 'info'"),
-        # payments additions
+        # payments base additions
         ("payments",   "notes",                 "TEXT"),
         ("payments",   "updated_at",            "DATETIME"),
+        # payments refund additions
+        ("payments",   "refund_status",         "VARCHAR(20)"),
+        ("payments",   "refund_reason",         "VARCHAR(30)"),
+        ("payments",   "original_amount",       "REAL"),
+        ("payments",   "penalty_amount",        "REAL"),
+        ("payments",   "refund_amount",         "REAL"),
+        ("payments",   "gateway_refund_id",     "VARCHAR(100)"),
+        ("payments",   "refund_failure_reason", "TEXT"),
+        ("payments",   "refund_initiated_at",   "DATETIME"),
+        ("payments",   "refund_processed_at",   "DATETIME"),
+        # gpu_job_telemetry additions (V2 GPU upgrade)
+        ("gpu_job_telemetry", "model_name",       "VARCHAR(128) DEFAULT 'SmartPrintDocumentAnalyzer'"),
+        ("gpu_job_telemetry", "model_version",    "VARCHAR(32) DEFAULT '1.0.0'"),
+        ("gpu_job_telemetry", "warmup_iters",     "INTEGER DEFAULT 0"),
+        ("gpu_job_telemetry", "memory_before_mb", "REAL"),
+        ("gpu_job_telemetry", "memory_after_mb",  "REAL"),
+        ("gpu_job_telemetry", "peak_memory_mb",   "REAL"),
+        ("gpu_job_telemetry", "throughput_rps",   "REAL"),
+        ("gpu_job_telemetry", "error_message",    "TEXT"),
+        ("gpu_job_telemetry", "started_at",       "DATETIME"),
+        ("gpu_job_telemetry", "completed_at",     "DATETIME"),
     ]
     try:
         with engine.connect() as conn:

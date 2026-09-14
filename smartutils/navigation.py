@@ -48,6 +48,7 @@ _ADMIN_ITEMS = [
     ("💳",  "Pay",        "Payments"),
     ("🚨",  "Alerts",     "AI Alerts"),
     ("🤖",  "AI",         "AI Assistant"),
+    ("⚡",  "GPU",        "GPU Monitor"),
     ("🔔",  "Notifs",     "Notifications"),
     ("📊",  "Reports",    "Reports"),
     ("👤",  "Profile",    "Profile"),
@@ -71,8 +72,8 @@ _UNIVERSITY_ADMIN_ITEMS = [
 ]
 
 # CSS selectors that uniquely target our dock rows by column count.
-# Shop Owner dock = 15 columns, Student dock = 13 columns, University Admin dock = 12 columns.
-_DOCK_ADMIN            = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(15))'
+# Shop Owner dock = 16 columns, Student dock = 13 columns, University Admin dock = 12 columns.
+_DOCK_ADMIN            = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(16))'
 _DOCK_STUDENT          = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(13)):not(:has([data-testid="stColumn"]:nth-child(14)))'
 _DOCK_UNIVERSITY_ADMIN = '[data-testid="stHorizontalBlock"]:has([data-testid="stColumn"]:nth-child(12)):not(:has([data-testid="stColumn"]:nth-child(13)))'
 _DOCK = _DOCK_ADMIN  # default; overridden in _build_dock_css

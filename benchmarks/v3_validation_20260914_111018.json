@@ -1,0 +1,70 @@
+{
+  "environment": {
+    "python": "3.13.9",
+    "os": "Windows 10",
+    "device": "cpu",
+    "gpu_name": "CPU (TensorFlow \u2014 no GPU)",
+    "cuda_available": false,
+    "cuda_version": null,
+    "framework": "TensorFlow",
+    "framework_version": "2.21.0",
+    "model": "SmartPrintDocumentAnalyzer",
+    "model_version": "1.0.0",
+    "precision": "FP32",
+    "batch_size": 1,
+    "input_shape": "(1, 3, 224, 224)",
+    "generated_at": "2026-09-14 11:10:17"
+  },
+  "latency": {
+    "cold_start_ms": 1.858,
+    "mean_ms": 2.593,
+    "median_ms": 1.789,
+    "p50_ms": 1.789,
+    "p95_ms": 5.916,
+    "p99_ms": 12.665,
+    "min_ms": 1.534,
+    "max_ms": 18.114,
+    "throughput_rps": 385.65,
+    "warmup_iters": 3,
+    "steady_iters": 50
+  },
+  "phase_breakdown": {
+    "preprocess_ms": 8.346,
+    "h2d_ms": 0.0,
+    "compute_ms": 0.95,
+    "d2h_ms": 0.0,
+    "postprocess_ms": 0.319,
+    "total_ms": 9.614
+  },
+  "memory": {
+    "before": {
+      "allocated_mb": 0.0,
+      "source": "not_available"
+    },
+    "peak_mb": 0.0,
+    "after_allocated_mb": 0.0
+  },
+  "speedup": {
+    "cpu_baseline_ms": 2.263,
+    "gpu_mean_ms": 2.593,
+    "speedup": 1.0,
+    "valid": false
+  },
+  "profiler": {
+    "ran": false,
+    "mode": "none",
+    "chrome_trace": "",
+    "summary": "",
+    "cuda_ops_observed": false,
+    "top_operators": []
+  },
+  "gpu_utilization": {
+    "sampled": false,
+    "mean_util_pct": 0.0,
+    "samples": []
+  },
+  "errors": [],
+  "notes": [
+    "Speedup not meaningful: both CPU and GPU paths use the same device (cpu). Speedup will show correctly on a CUDA machine."
+  ]
+}

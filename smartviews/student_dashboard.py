@@ -32,6 +32,9 @@ _STATUS_COLORS = {
     "collected":       "#6b7280",
     "cancelled":       "#ef4444",
     "failed":          "#ef4444",
+    "refund_pending":  "#f59e0b",
+    "refunded":        "#10b981",
+    "refund_failed":   "#ef4444",
 }
 
 _STATUS_ICONS = {
@@ -44,6 +47,9 @@ _STATUS_ICONS = {
     "collected":       "🎉",
     "cancelled":       "❌",
     "failed":          "⚠️",
+    "refund_pending":  "⏳",
+    "refunded":        "💰",
+    "refund_failed":   "⚠️",
 }
 
 
@@ -227,10 +233,67 @@ def show_student_dashboard():
                 """)
 
                 if status.lower() in ("queued", "printing"):
-                    if st.button("🔍 Track Live", key=f"track_{j['id']}", use_container_width=False):
-                        st.session_state["track_job_id"] = j["id"]
-                        st.session_state["current_page"] = "Track Order"
-                        st.rerun()
+                    btn_col1, btn_col2 = st.columns([1, 1])
+                    with btn_col1:
+                        if st.button("🔍 Track Live", key=f"track_{j['id']}", use_container_width=False):
+                            st.session_state["track_job_id"] = j["id"]
+                            st.session_state["current_page"] = "Track Order"
+                            st.rerun()
+                    with btn_col2:
+                        if status.lower() == "queued":
+                            if st.button("🚫 Cancel Print", key=f"cancel_init_{j['id']}", use_container_width=False):
+                                st.session_state[f"cancel_confirm_{j['id']}"] = True
+
+                # Cancellation confirmation dialog
+                if st.session_state.get(f"cancel_confirm_{j['id']}"):
+                    # Fetch payment amount to show user
+                    paid_amount = 0.0
+                    try:
+                        from smartdb.crud import get_payment_by_job
+                        pay = get_payment_by_job(j["id"])
+                        if pay:
+                            paid_amount = float(pay.get("amount") or 0.0)
+                    except Exception:
+                        paid_amount = float(j.get("total_cost") or j.get("cost") or 0.0)
+
+                    from smartcore.refund_service import calculate_refund, REASON_STUDENT_CANCELLATION
+                    penalty, refund_amt = calculate_refund(paid_amount, REASON_STUDENT_CANCELLATION)
+
+                    st.html(f"""
+                    <div class="cancel-confirm-box">
+                        <div class="ccb-title">🚨 Cancel Printing?</div>
+                        <div class="ccb-sub">Your document is currently in the queue.</div>
+                        <div class="ccb-row"><span>Original Amount</span><span class="ccb-val">&#8377;{paid_amount:.2f}</span></div>
+                        <div class="ccb-row"><span>Cancellation Fee (2%)</span><span class="ccb-val" style="color:#ef4444;">&#8377;{penalty:.2f}</span></div>
+                        <div class="ccb-row ccb-total"><span>Refund Amount</span><span class="ccb-val" style="color:#10b981;">&#8377;{refund_amt:.2f}</span></div>
+                        <div class="ccb-note">Refund will be initiated after confirmation.</div>
+                    </div>
+                    """)
+                    cc1, cc2 = st.columns(2)
+                    with cc1:
+                        if st.button("✅ Confirm Cancel", key=f"cancel_confirm_btn_{j['id']}", use_container_width=True):
+                            from smartcore.refund_service import process_student_cancellation
+                            result = process_student_cancellation(
+                                job_id=j["id"],
+                                requesting_user_id=user_id,
+                            )
+                            st.session_state[f"cancel_confirm_{j['id']}"] = False
+                            if result.get("success"):
+                                st.success(
+                                    f"💰 **Print job cancelled successfully.**\n\n"
+                                    f"Original amount: \u20b9{result.get('paid_amount', 0):.2f}\n\n"
+                                    f"Cancellation fee (2%): \u20b9{result.get('penalty', 0):.2f}\n\n"
+                                    f"**Refund amount: \u20b9{result.get('refund_amount', 0):.2f}**\n\n"
+                                    f"Your refund has been initiated successfully."
+                                )
+                            else:
+                                st.error(f"❌ {result.get('message', 'Cancellation failed.')}")
+                            import time; time.sleep(1.5)
+                            st.rerun()
+                    with cc2:
+                        if st.button("← Go Back", key=f"cancel_goback_{j['id']}", use_container_width=True):
+                            st.session_state[f"cancel_confirm_{j['id']}"] = False
+                            st.rerun()
 
     with col_right:
         st.html('<div class="section-title">🖨️ Printer Status</div>')
@@ -348,6 +411,57 @@ def show_student_dashboard():
                 except Exception:
                     pass
 
+    # ── Refund History ────────────────────────────────────────────────────
+    try:
+        from smartcore.refund_service import get_student_refund_history
+        refund_history = get_student_refund_history(user_id) or []
+        if refund_history:
+            st.html('<div class="section-title">💰 Refund History</div>')
+            # Build table rows
+            rows_html = ""
+            for r in refund_history:
+                rs = (r.get("refund_status") or "").upper()
+                rs_color = {
+                    "REFUNDED": "#10b981",
+                    "PENDING":  "#f59e0b",
+                    "FAILED":   "#ef4444",
+                    "PROCESSING": "#3b82f6",
+                }.get(rs, "#6b7280")
+                reason_label = {
+                    "STUDENT_CANCELLATION": "Cancellation",
+                    "POWER_FAILURE":        "Power Failure",
+                }.get(r.get("refund_reason") or "", r.get("refund_reason") or "—")
+                orig  = r.get("original_amount") or r.get("amount") or 0
+                pen   = r.get("penalty_amount") or 0
+                ref   = r.get("refund_amount") or 0
+                date_ = (r.get("refund_initiated_at") or "")[:16].replace("T", " ")
+                pid   = r.get("print_id") or r.get("job_id") or "—"
+                rows_html += f"""
+                <div class="rh-row">
+                    <span class="rh-cell rh-id">{pid}</span>
+                    <span class="rh-cell">&#8377;{orig:.2f}</span>
+                    <span class="rh-cell" style="color:#ef4444;">&#8377;{pen:.2f}</span>
+                    <span class="rh-cell" style="color:#10b981;">&#8377;{ref:.2f}</span>
+                    <span class="rh-cell">{reason_label}</span>
+                    <span class="rh-cell" style="color:{rs_color};font-weight:700;">{rs}</span>
+                    <span class="rh-cell rh-date">{date_}</span>
+                </div>
+                """
+            st.html(f"""
+            <div class="rh-header">
+                <span class="rh-cell rh-id">Job ID</span>
+                <span class="rh-cell">Original</span>
+                <span class="rh-cell">Fee</span>
+                <span class="rh-cell">Refunded</span>
+                <span class="rh-cell">Reason</span>
+                <span class="rh-cell">Status</span>
+                <span class="rh-cell rh-date">Date</span>
+            </div>
+            {rows_html}
+            """)
+    except Exception:
+        pass
+
     # ── Footer refresh ────────────────────────────────────────────────────────
     st.html(f"""
     <div style="text-align:center;color:rgba(255,255,255,.25);font-size:.72rem;margin-top:16px;">
@@ -451,4 +565,38 @@ def _dashboard_css() -> str:
     padding:3px 10px; border-radius:14px;
     font-size:.7rem; font-weight:700; white-space:nowrap; flex-shrink:0;
 }
+
+/* ── Cancel confirmation box ── */
+.cancel-confirm-box {
+    background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.25);
+    border-radius:14px; padding:18px 20px; margin:10px 0;
+}
+.ccb-title { font-size:1.05rem; font-weight:800; color:#FCA5A5; margin-bottom:6px; }
+.ccb-sub   { font-size:.8rem; color:rgba(255,255,255,.45); margin-bottom:12px; }
+.ccb-row   { display:flex; justify-content:space-between;
+             padding:6px 0; border-bottom:1px solid rgba(255,255,255,.05);
+             font-size:.85rem; color:rgba(255,255,255,.65); }
+.ccb-total { border-bottom:none; font-weight:700; font-size:.92rem; margin-top:4px; }
+.ccb-val   { font-weight:700; color:#fff; }
+.ccb-note  { font-size:.72rem; color:rgba(255,255,255,.35); margin-top:10px; }
+
+/* ── Refund history ── */
+.rh-header {
+    display:flex; gap:8px; padding:6px 10px;
+    background:rgba(0,217,255,.05); border:1px solid rgba(0,217,255,.1);
+    border-radius:8px; margin-bottom:4px;
+    font-size:.68rem; font-weight:700;
+    color:rgba(0,217,255,.75); text-transform:uppercase; letter-spacing:.4px;
+}
+.rh-row {
+    display:flex; gap:8px; align-items:center;
+    padding:8px 10px; background:rgba(255,255,255,.018);
+    border:1px solid rgba(255,255,255,.05); border-radius:8px; margin-bottom:3px;
+    font-size:.8rem; color:rgba(255,255,255,.75);
+    transition:background .15s;
+}
+.rh-row:hover { background:rgba(59,130,246,.05); }
+.rh-cell { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rh-id   { font-family:monospace; color:#60A5FA; font-weight:700; }
+.rh-date { color:rgba(255,255,255,.3); font-size:.72rem; }
 </style>"""
